@@ -2,8 +2,4 @@
 title: "About"
 ---
 
-About this site
-
-```{r}
-1 + 1
-```
+I am a part-time student in Prof Kam's class. This documents my learning journey in ISSS626, taught by the venerable Prof Kam.
