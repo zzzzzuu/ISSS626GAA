@@ -14,8 +14,8 @@ execute:
 
 ## Load packages
 
-```{r include=false}
-#| eval: False
+```{r}
+
 pacman::p_load(
   tidyverse,    # for data manipulation and visualization
   sf,           # for spatial data handling

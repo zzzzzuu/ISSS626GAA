@@ -10,7 +10,7 @@ execute:
   freeze: true #whatever document already commited does not render
 ---
 
-# test Install and launch the packages
+# Install and launch the packages
 
 ```{r}
 pacman::p_load(sf, spNetwork, tmap, tidyverse)
