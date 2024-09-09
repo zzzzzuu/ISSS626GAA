@@ -1,0 +1,99 @@
+---
+title: "Take-home Exercise 1"
+author: "Leow Xian Zu"
+date: "2 Sep 2024"
+date-modified: "last-modified"
+execute:
+  eval: true
+  echo: true 
+  message: false #no more warning message
+  freeze: true #whatever document already commited does not render
+---
+
+# Set up
+
+## Load packages
+
+```{r include=false}
+
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(
+  tidyverse,    # for data manipulation and visualization
+  sf,           # for spatial data handling
+  tmap,         # for thematic maps
+  tmaptools,    # additional tools for tmap
+  sfdep,        # for spatial dependence analysis
+  lubridate,    # for date/time manipulation
+  spatstat,     # for point pattern analysis
+  maptools,     # for spatial object manipulation
+  raster,       # for raster data handling
+  sp,           # for spatial data classes and methods
+  leaflet,      # for interactive maps
+  ggplot2,      # for advanced plotting
+  plotly,       # for interactive plots
+  DT,           # for interactive tables
+  knitr,        # for report generation
+  scales,       # for scale functions for visualization
+  viridis,      # for color scales
+  gridExtra,    # for arranging multiple plots
+  OpenStreetMap, # for importing OpenStreetMap data
+  osmdata,      # for working with OpenStreetMap data
+  lwgeom,       # for some advanced geometry operations
+  units
+)
+```
+
+takehome exercise.
+
+we are talking about Bangkok metropolitan, which has Bangkok and surrounding areas.
+
+See Wikipedia, for the provinces forming part of the metropolitan
+
+download, then use WGS 83/ UTM zone 27N. EPSG 32647.
+
+Need to check unit of measurement!!!! See how to convert.
+
+date time field, needs to take note. indicent date time, peak hours etc
+
+incident datetime, report datetime
+
+data cleaning.
+
+Check phone picture for the import read_csv.
+
+## Load files
+
+```{r}
+pacman::p_load(tidyverse, readr, sf, tmap, ggstatsplot)
+
+rdacc_sf <- read_csv("C:/zzzzzuu/ISSS626GAA/Take-home_Ex/Take-home_Ex01/data/thai_road_accident_2019_2022.csv") %>%
+  filter(!is.na(longitude) & longitude != "",
+         !is.na(latitude) & latitude != "") %>%
+  st_as_sf(coords = c(
+    "longitude", "latitude"),
+    crs=4326) %>%
+  st_transform(crs = 32647)
+
+roads_sf <- st_read("C:/zzzzzuu/ISSS626GAA/Take-home_Ex/Take-home_Ex01/data/hotosm_tha_roads_lines_shp.shp") %>%
+  st_make_valid() %>%
+  st_set_crs(4326) %>%
+  st_transform(crs = 32647)
+```
+
+```{r}
+admin_sf <- st_read("C:/zzzzzuu/ISSS626GAA/Take-home_Ex/Take-home_Ex01/data/tha_admbndp_admALL_rtsd_itos_20220121.shp") %>%
+  st_transform(crs = 32647)
+```
+
+```{r}
+# Check units
+st_crs(rdacc_sf)$units
+st_crs(admin_sf)$units
+st_crs(roads_sf)$units
+
+# If needed, convert units (e.g., from meters to kilometers)
+#rdacc_sf <- rdacc_sf %>%
+#  mutate(across(where(is.numeric), ~ . / 1000))
+#admin_sf <- admin_sf %>%
+#  mutate(across(where(is.numeric), ~ . / 1000))
+```
