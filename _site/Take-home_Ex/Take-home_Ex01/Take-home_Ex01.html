@@ -349,6 +349,13 @@ Geodetic CRS:  WGS 84</code></pre>
 <span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a><span class="co">#admin_sf &lt;- admin_sf %&gt;%</span></span>
 <span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a><span class="co">#  mutate(across(where(is.numeric), ~ . / 1000))</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
+<p>Need to convert accident data from csv to sf</p>
+<p>Consider creating folder called sandbox.</p>
+<p>as long as it’s in data folder, it will not push over.</p>
+<p>networks have to be in LINESTRING version. not MULTILINE. MULTILINE STRING don’t work. If we happen to have that, use SF to break into single line. Pay attention because in openstreetmap it will be multi line string. Will give error message in code.</p>
+<p>Anything that detect driver behaviour and physical, create subset. Caused by drink? ruthless driving? Junction? it’s in the accident datapoint.</p>
+<p>Bangkok metropolitan region. The way we use it is to use the names of the provinces in the wiki. Select out all these 6 regions. That will define the area. We have to DIY this.</p>
+<p>Filter out from HDX (then write into rds)</p>
 
 
 </section>
