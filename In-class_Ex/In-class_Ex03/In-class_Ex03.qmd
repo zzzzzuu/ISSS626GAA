@@ -1,11 +1,204 @@
 ---
-title: "In-class Exercise 03"
-author: "Leow Xian Zu"
-date: "9 Sep 2024"
-date-modified: "last-modified"
-execute:
-  eval: true
-  echo: true 
-  message: false #no more warning message
-  freeze: true #whatever document already commited does not render
+title: "Hands-on Exercise 03" 
+author: "Leow Xian Zu" 
+date: "1 September 2024" 
+date-modified: "last-modified" 
+execute:   
+  eval: true   
+  echo: true    
+  message: false #no more warning message   
+  freeze: true #whatever document already commited does not render 
 ---
+
+# Install and launch the packages
+
+```{r}
+pacman::p_load(sf, spNetwork, tmap, tidyverse)
+```
+
+Reiterate - sf we used in hands-on exercise 1. This is R's way to handle and import data. It also allows us to write into RDS (R Datafile) format. One good way to use this function is to filter and write out a subset of a large data file, then it will shorten processing time.
+
+Tidyverse is mainly for different data fields. Includes lubridate for date fields.
+
+spNetwork is for kernel densities. Different from spatstat. It is also based on sp. But sp was retired. spNetwork is no longer ocnforming to sp, and now to sf, "moving to sf". So actually what we are using is all sf already! No need for owin etc as it is taken care in this package.
+
+# Import the data and prep it
+
+```{r}
+network <- st_read(dsn="C:/zzzzzuu/ISSS626GAA/Hands-on_Ex/Hands-on_Ex03/data/geospatial",                    layer="Punggol_St") %>%
+  st_transform(crs = 3414) 
+childcare <- st_read(dsn="C:/zzzzzuu/ISSS626GAA/Hands-on_Ex/Hands-on_Ex03/data/geospatial",                      layer="Punggol_CC") %>%
+  st_transform(crs = 3414) %>%
+  st_zm() #this drops the z  st_crs(childcare) 
+```
+
+## Examine plot
+
+```{r}
+plot(st_geometry(network)) 
+plot(childcare,add=T,col='red',pch = 19)
+```
+
+Cool! st_read is used because the .shp file is in ESRI shapefile format. Because of this, I have to use dsn Destination folder. Note: No need for extension, because it can automatically pick out the shape file for conversion.
+
+Childcare is in data.gov file. It was converted into kml first, then into a shp file. KML likes to have x, y, z. z is the height. Hence we remove z in the data cleaning process. Check out the line "Dimension: xyz". spNetwork only can take xy. Need to get rid of point z.
+
+plot is a basic function based on base R. basic, but useful. Sequence is important. Road network first, then whatever is on top, which is the childcare centres. "Add=T" means we add on to whatever is plotting already.
+
+st_geometry is used so it only pulls the geometry, without the value assigned to it. Without using st_geometry will result in multiple same plots, each using one of the value fields in the dataset, which is not what we want. Then what about childcare? It's also geometric. But we already coloured it into one colour, so there is no multiple colour. Note the multiple ways to do things.
+
+Let's look at it in leaflet form.
+
+```{r}
+tmap_mode('view') 
+tm_shape(childcare) +   tm_dots() +   tm_shape(network) +   tm_lines()  
+tmap_mode("plot")
+```
+
+This is using tmap library, logic is around the same. We have to specify the layers we use. We don't use it but using tmap shape, we are using the extend of the map area, then we can shade it into different formats. Dots is used instead of bubble to keep the size same when we zoom in and out, useing leaflet as a backdrop.
+
+Why use plot over tmap? Simple and little lines of code. Why use tmap over plot? More flexibility and functions (via leaflet, zooming and hovering, a lite-weight, javascript-based mapping). This is especially useful after the kernel density estimation analysis.
+
+# Network KDE Analysis
+
+## Lixelization
+
+Before computing NKDE, the SpatialLines object need to be cut into lixels with a specified minimal distance. This task can be performed by using with [lixelize_lines()](https://jeremygelb.github.io/spNetwork/reference/lixelize_lines.html) of **spNetwork** as shown in the code chunk below.
+
+Lixel lines are a concept used in spatial analysis, particularly in network-based analysis.
+
+1.  Lixels: This term is a combination of "line" and "pixel". Just as a pixel is the smallest unit of a raster image, a lixel is the smallest unit of a line in a network.
+
+2.  Purpose: Lixels are used to discretise continuous linear features (like roads or rivers) into smaller, equal-length segments. This discretization is often necessary for certain types of spatial analysis, especially when working with network data.
+
+3.  NKDE (Network Kernel Density Estimation): This is a method used to estimate the density of events or phenomena along a network. Before applying NKDE, it's often necessary to break down the network into these smaller units (lixels) for more accurate analysis.
+
+4.  Minimal distance: When creating lixels, you specify a minimal distance. This is the length of each lixel segment. The lines in your network will be cut into segments of this length.
+
+5.  spNetwork package: This is the library that provides functions for spatial network analysis. The `lixelize_lines()` function is used to perform this lixelization process.
+
+6.  SpatialLines object: This is a data structure used to represent linear features in a spatial context. The lixelization process is applied to this object.
+
+The process of creating lixels allows for more precise analysis along a network, as it creates a consistent unit of measurement and analysis along potentially irregular network structures. This can be particularly useful in applications like traffic analysis, crime mapping along street networks, or analyzing the spread of phenomena along river systems. In this case, I will be looking at childcare centres.
+
+```{r}
+lixels <- lixelize_lines(network,
+                         700,
+                         mindist = 50)
+```
+
+Why these values? 700 and 375 was experimented on. this is a road network, we're looking at childcare. Usually, in typical neighbourhoods, we will get other caregivers to bring kids to and fro childcare centres. So, let's take reasonable walking distance. NTU researchers said in general, walking distance - based on weather and perceived hindrance - is roughly about 700m. That's why it's 700m here.
+
+Then mindist, (minimium distance), this is by instinct. Using search radius of 700m, this we set as half of 700. But we can change it. Let's test and try. Original network had 2642 obs. of 3 variables (i.e. segments). They are not continuous. The line network is made of 2642 segments. We ask the machine to split them into line segments, of each 700m, with centrepoints minimum 350m. But after running, we have 2645 segments now! We have 3 more. Now if we increased mindist to 50, we will have more segments 2648.
+
+Now, determination of this distance is by calculating nearest neighbour. Plot it out to see which one will catch reasonable insights. We should be able to pick up reasonable interest points. I can look at distribution first, take the lower 25. That might catch at least at any one time, the lowest 25 in any line segment. So use the distance to help to determine.
+
+## Line centre points
+
+```{r}
+samples <- lines_center(lixels)  
+```
+
+This code calculates centre points. The idea is at each road segment, we have 2645, we will have 2645 centrepoints; same. Let's plot it out and look at it.
+
+```{r}
+
+tmap_mode('view') 
+tm_shape(samples) +   tm_dots() +   tm_shape(network) +   tm_lines()  
+tmap_mode("plot")
+```
+
+Samples is also in sf format. You can review it. They are points, based on lixel samples.
+
+## Actual NKDE
+
+```{r}
+densities <- nkde(network,
+                  events = childcare,
+                  w = rep(1, nrow(childcare)),
+                  samples = samples,
+                  kernel_name = "quartic", #Different kernel type, slight changes to smoothing.
+                  bw = 300,                    
+                  div= "bw",
+                  method = "simple", #Simple, Discontinuous, and Continuous
+                  digits = 1,
+                  tol = 1,
+                  grid_shape = c(1,1),
+                  max_depth = 8,
+                  agg = 5,
+                  sparse = TRUE,
+                  verbose = FALSE)
+```
+
+For kernel type, try not to use Gaussian as it may give negative towards the end points. The rest, can test it out :) Output is actually one line of numbers; a list contained in one R object. It gives intensity. After this, we need to append the intensity values into the simple tibble dataframe, or the lixelised dataframe.
+
+Let's examine and visualise the NKDE
+
+Sample originally has 4 columns. If we add in density, there will be 5 columns. DO NOT SORT IN BETWEEN THESE STEPS. Then it will not mapped correctly. Please be careful! Like a left join but without unique identifier.
+
+```{r}
+samples$density <- densities
+lixels$density <- densities 
+summary(samples$density) 
+summary(lixels$density)
+```
+
+That looks really small. SVY21 projection system is in meter. The densities become small. Let's change it to events per KM.
+
+```{r}
+# rescaling to help the mapping 
+samples$density <- samples$density*1000  # Consider writing somewhere that events is unit per KM
+lixels$density <- lixels$density*1000 
+summary(samples$density) 
+summary(lixels$density)
+```
+
+Ok. Looks better. Let's visualise it.
+
+```{r}
+tmap_mode('view') 
+tm_shape(lixels)+
+  tm_lines(col="density")+
+  tm_shape(childcare)+
+  tm_dots() 
+tmap_mode('plot')
+```
+
+# Network constrained G and L function analysis
+
+In this section, we are going to perform complete spatial randomness (CSR) test by using *kfunctions()* of **spNetwork** package. The null hypothesis is defined as:
+
+**Ho: The observed spatial point events (i.e distribution of childcare centres) are uniformly distributed over a street network in Punggol Planning Area.**
+
+The CSR test is based on the assumption of the binomial point process which implies the hypothesis that the childcare centres are randomly and independently distributed over the street network.
+
+If this hypothesis is rejected, we may infer that the distribution of childcare centres are spatially interacting and dependent on each other; as a result, they may form nonrandom patterns.
+
+```{r}
+kfun_childcare <- kfunctions(network,
+                             childcare,
+                             start = 0,
+                             end = 1000,
+                             step = 50,
+                             width = 50,
+                             nsim = 50,
+                             resolution = 50,
+                             verbose = FALSE,
+                             conf_int = 0.05)
+```
+
+```{r}
+kfun_childcare$plotk
+```
+
+This is abit different from spatstat. When we run this K function, the algorithm is k and g function. Use
+
+```         
+View(kfun_childcare)
+```
+
+You will see the k and g function values. Recall - k is cumulative distance, g is ring-by-ring. This is because calculation is the same. Because of this, we need to do plotk. We can choose plotg too. Plot uses ggplot library. Auto detects the axis titles.
+
+See the envelop. Simulation 50 is not correct. It should be starting from 0. So do 49 if you may.
+
+Based on the plot, we see regular pattern (outside envelop), but at the longer distance, there will be complete spatial randomness (inside envelop). This shows usually childcare centres distance themselves between the interval.

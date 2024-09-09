@@ -96,3 +96,17 @@ st_crs(roads_sf)$units
 #admin_sf <- admin_sf %>%
 #  mutate(across(where(is.numeric), ~ . / 1000))
 ```
+
+Need to convert accident data from csv to sf
+
+Consider creating folder called sandbox.
+
+as long as it's in data folder, it will not push over.
+
+networks have to be in LINESTRING version. not MULTILINE. MULTILINE STRING don't work. If we happen to have that, use SF to break into single line. Pay attention because in openstreetmap it will be multiline string. Will give error message in code.
+
+Anything that detect driver behaviour and physical, create subset. Caused by drink? ruthless driving? Junction? it's in the acident dtapoint.
+
+Bangkok metropolitan region. The way we use it is to use the names of the provinces in the wiki. Select out all these 6 regions. That will define the area. We have to DIY this.
+
+Filter out from HDX (then write into rds)
