@@ -1,0 +1,14 @@
+{
+  "hash": "dbf51eda920f34541b5488b17397b8fe",
+  "result": {
+    "markdown": "---\ntitle: \"Take-home Exercise 1\"\nauthor: \"Leow Xian Zu\"\ndate: \"2 Sep 2024\"\ndate-modified: \"last-modified\"\nexecute:\n  eval: true\n  echo: true \n  message: false #no more warning message\n  freeze: true #whatever document already commited does not render\n---\n\n\ntakehome exercise.\n\nwe are talking about Bangkok metropolitan, which has Bangkok and surrounding areas.\n\nSee Wikipedia, for the provinces forming part of the metropolitan\n\ndownload, then use WGS 83/ UTM zone 27N. EPSG 32647.\n\nNeed to check unit of measurement!!!! See how to convert.\n\ndate time field, needs to take note. indicent date time, peak hours etc\n\nincident datetime, report datetime\n\ndata cleaning.\n\nCheck phone picture for the import read_csv.\n\n\n::: {.cell}\n\n```{.r .cell-code}\npacman::p_load(tidyverse, readr, sf, tmap, ggstatsplot)\n\nrdacc_sf <- read_csv(\"C:/zzzzzuu/ISSS626GAA/Take-home_Ex/Take-home_Ex01/Data/thai_road_accident_2019_2022.csv\") %>%\n  filter(!is.na(longitude) & longitude != \"\",\n         !is.na(latitude) & latitude != \"\") %>%\n  st_as_sf(coords = c(\n    \"longitude\", \"latitude\"),\n    crs=4326) %>%\n  st_transform(crs = 32647)\n```\n\n::: {.cell-output .cell-output-stderr}\n```\nRows: 81735 Columns: 18\n── Column specification ────────────────────────────────────────────────────────\nDelimiter: \",\"\nchr  (10): province_th, province_en, agency, route, vehicle_type, presumed_c...\ndbl   (6): acc_code, number_of_vehicles_involved, number_of_fatalities, numb...\ndttm  (2): incident_datetime, report_datetime\n\nℹ Use `spec()` to retrieve the full column specification for this data.\nℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.\n```\n:::\n:::\n",
+    "supporting": [],
+    "filters": [
+      "rmarkdown/pagebreak.lua"
+    ],
+    "includes": {},
+    "engineDependencies": {},
+    "preserve": {},
+    "postProcess": true
+  }
+}
