@@ -15,8 +15,7 @@ execute:
 ## Load packages
 
 ```{r include=false}
-
-if (!require("pacman")) install.packages("pacman")
+#| eval: False
 pacman::p_load(
   tidyverse,    # for data manipulation and visualization
   sf,           # for spatial data handling
