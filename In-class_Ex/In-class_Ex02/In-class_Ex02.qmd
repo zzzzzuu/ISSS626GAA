@@ -1,0 +1,143 @@
+---
+title: "In-class Exercise 2"
+author: "Leow Xian Zu"
+date: "2 Sep 2024"
+date-modified: "last-modified"
+execute:
+  eval: true
+  echo: true 
+  message: false #no more warning message
+  freeze: true #whatever document already commited does not render
+---
+
+# Set up
+
+## Finding maptools
+
+Maptools have been retired. So we installed it from the CRAN repository.
+
+```{r}
+#| eval: false
+install.packages("maptools", repos = "https://packagemanager.posit.co/cran/2023-10-13")
+```
+
+## Load packages
+
+```{r}
+pacman::p_load(tidyverse, sf, tmap, ggstatsplot, spatstat)
+set.seed(1234)
+```
+
+## Read the map data
+
+```{r}
+mpsz14_shp <- st_read(dsn = "C:/zzzzzuu/ISSS626GAA/In-class_Ex/In-class_Ex01/Data",
+                layer = "MP14_SUBZONE_WEB_PL")
+
+```
+
+# Wrangling
+
+## Union for the outline
+
+```{r}
+sg_sf <- mpsz14_shp %>%
+  st_union()
+tmap_mode("plot")
+qtm(sg_sf)
+```
+
+Let's try the spatstet.geom method.
+
+```{r}
+childcare_sf <- st_read("C:/zzzzzuu/ISSS626GAA/Hands-on_Ex/Hands-on_Ex02/data/child-care-services-geojson.geojson") %>%
+  st_transform(crs = 3414)
+childcare <- as_Spatial(childcare_sf)
+childcareSG_ppp <- as.ppp(childcare_sf)
+
+sg_owin <- as.owin(sg_sf)
+plot(sg_owin)
+childcareSG_ppp <- childcareSG_ppp[sg_owin]
+
+childcareSG_ppp.km <- rescale.ppp(childcareSG_ppp, 1000, "km")
+kde_childcareSG.bw <- density(childcareSG_ppp.km, sigma=bw.diggle, edge=TRUE, kernel="gaussian")
+
+kde_childcareSG_adaptive <- adaptive.density(childcareSG_ppp.km, method="kernel")
+plot(kde_childcareSG_adaptive)
+
+gridded_kde_childcareSG_ad <- as(
+  kde_childcareSG_adaptive,
+  "SpatialGridDataFrame")
+pacman::p_load(sp)
+spplot(gridded_kde_childcareSG_ad)
+
+```
+
+# Following Prof's upload on in-class exercise
+
+```{r}
+childcare_ppp <- as.ppp(childcare_sf)
+plot(childcare_ppp)
+summary(childcare_ppp)
+```
+
+```{r}
+sg_owin <- as.owin(sg_sf)
+plot(sg_owin)
+summary(sg_owin)
+```
+
+```{r}
+childcareSG_ppp = childcare_ppp[sg_owin]
+childcareSG_ppp.km <- rescale.ppp(childcareSG_ppp, 
+                                  1000, 
+                                  "km")
+
+kde_childcareSG_adaptive <- adaptive.density(
+  childcareSG_ppp.km, 
+  method="kernel")
+plot(kde_childcareSG_adaptive)
+```
+
+```{r}
+gridded_kde_childcareSG_ad <- as(
+  kde_childcareSG_adaptive,
+  "SpatialGridDataFrame")
+spplot(gridded_kde_childcareSG_ad)
+```
+
+```{r}
+tm_shape(gridded_kde_childcareSG_ad) + 
+  tm_raster(palette = "viridis") +
+  tm_layout(legend.position = c("right", "bottom"), 
+            frame = FALSE,
+            bg.color = "#E4D5C9")
+```
+
+## Dive into Punggol
+
+```{r}
+pg_owin <- mpsz14_shp %>%
+  filter(PLN_AREA_N == "PUNGGOL") %>%
+  as.owin()
+
+childcare_pg = childcare_ppp[pg_owin]
+
+plot(childcare_pg)  
+```
+
+```{r}
+set.seed(1234)
+```
+
+# A look into Thai Road Accidents
+
+```{r}
+rdacc_sf <- read_csv("C:/zzzzzuu/ISSS626GAA/Take-home_Ex/Take-home_Ex01/Data/thai_road_accident_2019_2022.csv") %>%
+  filter(!is.na(longitude) & longitude != "", 
+         !is.na(latitude) & latitude != "") %>%
+  st_as_sf(coords = c(
+    "longitude", "latitude"),
+    crs=4326) %>%
+  st_transform(crs = 32647) 
+```
