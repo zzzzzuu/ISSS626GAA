@@ -278,7 +278,7 @@ Let's try to plot it.
 ## Overall situation of road accidents in BMR
 
 ```{r}
-#| eval: false
+
 lixels$display_name <- ifelse(is.na(lixels$name_en), 
                               paste(lixels$highway,": Unnamed Road"),
                               paste(lixels$highway,": ",lixels$name_en))
