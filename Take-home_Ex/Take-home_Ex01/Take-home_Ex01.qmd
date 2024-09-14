@@ -220,3 +220,43 @@ tm_shape(rdacc) +
 #| eval: false
 tmap_mode('plot')
 ```
+
+## Lixelisation
+
+To prepare for Network Kernel Density Estimation (NKDE), the road network is divided into small, equal segments called lixels using the lixelize_lines() function from the spNetwork package. Lixels are like pixels for lines, allowing more precise analysis along the network. This process is crucial for accurately studying patterns of childcare centers along the road network. It creates a consistent unit of measurement, which is especially useful when dealing with irregular network structures.
+
+```{r}
+#| eval: false
+lixels <- lixelize_lines(roads_filtered, 
+                         700, 
+                         mindist = 500)
+samples <- lines_center(lixels) 
+densities <- nkde(roads_filtered, 
+                  events = rdacc,
+                  w = rep(1, nrow(rdacc)),
+                  samples = samples,
+                  kernel_name = "quartic",
+                  bw = 100, 
+                  div= "bw", 
+                  method = "simple", 
+                  digits = 1, 
+                  tol = 1,
+                  grid_shape = c(4,4), 
+                  max_depth = 8,
+                  agg = 5, 
+                  sparse = TRUE,
+                  verbose = FALSE)
+samples$density <- densities
+lixels$density <- densities
+summary(samples$density)
+
+
+```
+
+The values seem small. The measurements must be in metres. Let's correct that to km later. Let's save the lixelised data first.
+
+```{r}
+#| eval: false
+write_rds(lixels, "data/sandbox/lixels.rds")
+write_rds(samples, "data/sandbox/samples.rds")
+```

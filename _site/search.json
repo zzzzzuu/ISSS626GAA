@@ -383,5 +383,12 @@
     "title": "Take-home Exercise 1",
     "section": "",
     "text": "This segment makes our data smaller and easier to work with. It is savedin a special format (RDS) in a ‘sandbox’ folder. This helps my computer run faster and keeps the project tidy. I used commands to save and load data, and tell some parts of our code not to run again if not needed.\n\nwrite_rds(roads_sf_bkk_veh_ls, \"data/sandbox/roads.rds\")\nwrite_rds(rdacc_sf_bkk, \"data/sandbox/rdacc.rds\")\nwrite_rds(admin_sf_bkk, \"data/sandbox/admin.rds\")\n\n\nroads &lt;- read_rds(\"data/sandbox/roads.rds\")\nrdacc &lt;- read_rds(\"data/sandbox/rdacc.rds\")\nadmin &lt;- read_rds(\"data/sandbox/admin.rds\")"
+  },
+  {
+    "objectID": "Take-home_Ex/Take-home_Ex01/Take-home_Ex01.html#lixelisation",
+    "href": "Take-home_Ex/Take-home_Ex01/Take-home_Ex01.html#lixelisation",
+    "title": "Take-home Exercise 1",
+    "section": "Lixelisation",
+    "text": "Lixelisation\nTo prepare for Network Kernel Density Estimation (NKDE), the road network is divided into small, equal segments called lixels using the lixelize_lines() function from the spNetwork package. Lixels are like pixels for lines, allowing more precise analysis along the network. This process is crucial for accurately studying patterns of childcare centers along the road network. It creates a consistent unit of measurement, which is especially useful when dealing with irregular network structures.\n\nlixels &lt;- lixelize_lines(roads_filtered, \n                         700, \n                         mindist = 500)\nsamples &lt;- lines_center(lixels) \ndensities &lt;- nkde(roads_filtered, \n                  events = rdacc,\n                  w = rep(1, nrow(rdacc)),\n                  samples = samples,\n                  kernel_name = \"quartic\",\n                  bw = 100, \n                  div= \"bw\", \n                  method = \"simple\", \n                  digits = 1, \n                  tol = 1,\n                  grid_shape = c(4,4), \n                  max_depth = 8,\n                  agg = 5, \n                  sparse = TRUE,\n                  verbose = FALSE)\nsamples$density &lt;- densities\nlixels$density &lt;- densities\nsummary(samples$density)\n\nThe values seem small. The measurements must be in metres. Let’s correct that to km later. Let’s save the lixelised data first.\n\nwrite_rds(lixels, \"data/sandbox/lixels.rds\")\nwrite_rds(samples, \"data/sandbox/samples.rds\")"
   }
 ]
