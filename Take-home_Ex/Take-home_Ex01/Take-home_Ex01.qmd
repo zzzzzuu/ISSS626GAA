@@ -31,6 +31,7 @@ pacman::p_load(
   ggplot2,      # for advanced plotting
   spNetwork     # for spatial network analysis
 )
+set.seed(1234)
 ```
 
 ## Load files
@@ -46,6 +47,7 @@ In preparing our analysis of road traffic accidents in the Bangkok Metropolitan 
 We then transform this data into a spatial format using `st_as_sf()`. This conversion is essential as it allows us to perform spatial operations and visualisations. We specify the coordinate reference system (CRS) as EPSG:32647, which is tailored for Thailand. This was double-checked on https://epsg.io/. This choice is deliberate - using a local CRS ensures more accurate distance calculations and area representations compared to a global system like WGS84. For the road network data, sourced from OpenStreetMap, we employ `st_read()` to load the shapefile. Recognizing that OSM data can sometimes contain geometry inconsistencies, we apply `st_make_valid()`. This crucial step corrects any invalid geometries that could potentially crash our analysis or produce erroneous results in spatial operations. Lastly, we import administrative boundary data, again ensuring it aligns with our chosen CRS.
 
 ```{r}
+#| eval: false
 rdacc_sf <- read_csv("C:/zzzzzuu/ISSS626GAA/Take-home_Ex/Take-home_Ex01/data/thai_road_accident_2019_2022.csv") %>%
   filter(!is.na(longitude) & longitude != "",
          !is.na(latitude) & latitude != "") %>%
@@ -68,27 +70,29 @@ admin_sf <- st_read(dsn = "C:/zzzzzuu/ISSS626GAA/Take-Home_Ex/Take-Home_Ex01/dat
 
 Need to check unit of measurement!!!! See how to convert.
 
-::: callout-tip
-## Check that the files are in sf format
-
 ```{r}
+#| eval: false
 class(admin_sf)
 class(rdacc_sf)
 class(roads_sf)
 ```
-:::
+
+## Check date and time format (POSIXct)
 
 ```{r}
-class(admin_sf)
-class(rdacc_sf)
-class(roads_sf)
+#| eval: false
+class(rdacc_sf$incident_datetime)
+class(rdacc_sf$report_datetime)
 ```
+
+The incident_datetime and report_datetime fields are stored in POSIXct format, a structure that captures year, month, date, and time information. This format allows for easy extraction of specific temporal components such as month, day of the year, or year via lubridate package. The level of detail and flexibility in datetime handling is only available when the data is properly imported and parsed using readr.
 
 ## Data Wrangling 2: Filtering to a smaller subset of data
 
 The initial datasets cover all of Thailand and include various road types. To focus on the Bangkok Metropolitan Region (BMR), a spatial filter is applied to extract data for Bangkok and its five adjacent provinces: Nakhon Pathom, Pathum Thani, Nonthaburi, Samut Prakan, and Samut Sakhon. This step reduces data volume and ensures geographic relevance. Additionally, the road network data is filtered to include only roads accessible to motor vehicles, excluding roads like pedestrian paths and cycling lanes. These filtering processes enhance the accuracy of the subsequent analysis by focusing on relevant geographic areas and road types where motor vehicle accidents are likely to occur.
 
 ```{r}
+#| eval: false
 bangkok_areas <- c("Bangkok",
                    "Nonthaburi",
                    "Samut Prakan",
@@ -131,53 +135,173 @@ Refer to https://wiki.openstreetmap.org/wiki/WikiProject_Thailand#Highway_classi
 
 The road network data contains both linestrings and multilinestrings. Multilinestrings represent complex road segments with multiple connected lines, while linestrings are single, continuous lines. Converting all geometries to linestrings simplifies the data structure, ensuring uniformity across the dataset, and makes it easier for lixelisation. This conversion is necessary for consistent analysis, as many spatial operations work more efficiently with simple linestring geometries.
 
-## Check that incident time and report time are in proper format
-
 ```{r}
-class(rdacc_sf_bkk$incident_datetime)
-class(rdacc_sf_bkk$report_datetime)
+#| eval: false
+geometry_types <- roads_sf_bkk_veh %>%
+  st_geometry_type() %>%
+  as.character() %>%
+  unique()
+
+if(length(geometry_types) == 1 && geometry_types == "LINESTRING") {
+  print("All geometries are LINESTRING")
+} else {
+  print("Not all geometries are LINESTRING. Types found:")
+  print(geometry_types)
+}
+
+
+roads_sf_bkk_veh_ls <- roads_sf_bkk_veh %>%
+  st_cast("MULTILINESTRING", group_or_split = TRUE) %>%  
+  st_cast("LINESTRING")
+
+
+geometry_types <- roads_sf_bkk_veh_ls %>%
+  st_geometry_type() %>%
+  as.character() %>%
+  unique()
+
+if(length(geometry_types) == 1 && geometry_types == "LINESTRING") {
+  print("All geometries are LINESTRING")
+} else {
+  print("Not all geometries are LINESTRING. Types found:")
+  print(geometry_types)
+}
 ```
 
-incident_datetime and report_datetime is in POSIXct, which is a datetime structure. It captures, year month date, and time. We can explicitly request for the month of the day... year... day of the year... so on and so forth. This will not appear if it is read.csv!
+## Write a smaller subset of the data for easier compute times
 
-Lubridate allows us to extract which month of the year, which date of the week from the two fields. Lubridate has functions like day(), wday(), month() to get the respective.
+This segment makes our data smaller and easier to work with. It is savedin a special format (RDS) in a 'sandbox' folder. This helps my computer run faster and keeps the project tidy. I used commands to save and load data, and tell some parts of our code not to run again if not needed.
 
-Here's an example of getting month column by using lubridate:
+```{r}
+#| eval: false
+write_rds(roads_sf_bkk_veh_ls, "data/sandbox/roads.rds")
+write_rds(rdacc_sf_bkk, "data/sandbox/rdacc.rds")
+write_rds(admin_sf_bkk, "data/sandbox/admin.rds")
 
-After reading %\>%
+```
 
-mutate(Month = month(incident_datetime))
+```{r}
+roads <- read_rds("data/sandbox/roads.rds")
+rdacc <- read_rds("data/sandbox/rdacc.rds")
+admin <- read_rds("data/sandbox/admin.rds")
+```
 
-mutate(Month_fac = month(incident_datetime,
+# Analysis
 
-label = TRUE,
+Roads dataset is still too dense. It is difficult to make meaningful insights out of it, so we will drop more, smaller roads.
 
-abbr = TRUE))
+```{r}
+unique(roads$highway)
+roads_filtered <- roads %>%
+  filter(!is.na(highway) & 
+           (highway %in% c("secondary",
+                           "secondary_link",
+                           "primary",
+                           "primary_link",
+                           "trunk_link",
+                           "trunk",
+                           "motorway",
+                           "motorway_link",
+                           "tertiary_link",
+                           "tertiary")))
+plot(st_geometry(roads_filtered))
+```
 
-This will derive a field with month column. We can also change it to day of week.
+```{r}
+#| eval: false
+tmap_mode('plot')
+tm_shape(rdacc) +
+  tm_dots(col = "red", size = 0.1) +
+  tm_shape(roads_filtered) +
+  tm_lines()
+```
 
-%\>%
+```{r}
+#| eval: false
+tmap_mode('plot')
+```
 
-mutate(Dayofweek = wday(incident_datetime))
+## Lixelisation
 
-After done, use write_rds(acc, "data/rds/acc.rds")
+To prepare for Network Kernel Density Estimation (NKDE), the road network is divided into small, equal segments called lixels using the lixelize_lines() function from the spNetwork package. Lixels are like pixels for lines, allowing more precise analysis along the network. This process is crucial for accurately studying patterns of childcare centers along the road network. It creates a consistent unit of measurement, which is especially useful when dealing with irregular network structures.
 
-This will save the file
+```{r}
+#| eval: false
+lixels <- lixelize_lines(roads_filtered, 
+                         700, 
+                         mindist = 500)
+samples <- lines_center(lixels) 
+densities <- nkde(roads_filtered, 
+                  events = rdacc,
+                  w = rep(1, nrow(rdacc)),
+                  samples = samples,
+                  kernel_name = "quartic",
+                  bw = 100, 
+                  div= "bw", 
+                  method = "simple", 
+                  digits = 1, 
+                  tol = 1,
+                  grid_shape = c(4,4), 
+                  max_depth = 8,
+                  agg = 5, 
+                  sparse = TRUE,
+                  verbose = FALSE)
+samples$density <- densities
+lixels$density <- densities
+summary(samples$density)
 
-Now the processing file is redundance, insert **#\| eval: false** to reduce computation.
 
-To use the tidy clean file, we should use "acc \<- read_rds("data/rds/acc.rds") It should work.
+```
 
-Need to convert accident data from csv to sf
+The values seem small. The measurements must be in metres. Let's correct that to km later. Let's save the lixelised data first.
 
-Consider creating folder called sandbox.
+```{r}
+#| eval: false
+write_rds(lixels, "data/sandbox/lixels.rds")
+write_rds(samples, "data/sandbox/samples.rds")
+```
 
-as long as it's in data folder, it will not push over.
+```{r}
+lixels <- read_rds("data/sandbox/lixels.rds")
+samples <- read_rds("data/sandbox/samples.rds")
+samples$density <- samples$density*1000
+lixels$density <- lixels$density*1000
+summary(samples$density)
+summary(lixels$density)
+```
 
-networks have to be in LINESTRING version. not MULTILINE. MULTILINE STRING don't work. If we happen to have that, use SF to break into single line. Pay attention because in openstreetmap it will be multi line string. Will give error message in code.
+That looks better. Seems that the hotspots are quite scant and concentrated at the top. It would be good to merge everything below the mean, while having more granular breaks in the top quartile to examine the hot spots in more detail.
 
-Junction? it's in the accident datapoint.
+Let's try to plot it.
 
-Bangkok metropolitan region. The way we use it is to use the names of the provinces in the wiki. Select out all these 6 regions. That will define the area. We have to DIY this.
+## Overall situation of road accidents in BMR
 
-Filter out from HDX (then write into rds)
+```{r}
+lixels$display_name <- ifelse(is.na(lixels$name_en), 
+                              paste(lixels$highway,": Unnamed Road"),
+                              paste(lixels$highway,": ",lixels$name_en))
+
+tmap_mode('view')
+custom_breaks <- c(0, quantile(lixels$density, c(0.85, 
+                                                 0.9, 
+                                                 0.95,
+                                                 0.99, 
+                                                 1)))
+tm_shape(lixels) +
+  tm_lines(col = "density",
+           id = "display_name",
+           breaks = custom_breaks,
+           palette = "YlOrRd",
+           lwd = 1.5)+
+  tm_shape(admin) +  # Add this line
+  tm_borders(col = "black", lwd = 2, alpha = 0.5)  # And this line
+
+tmap_mode('plot')
+
+```
+
+The accident density map of Bangkok and its surrounding provinces reveals significant patterns in road safety across the region. The central area, primarily Bangkok, exhibits the highest concentration of accident hotspots, indicating a greater risk in the urban core. This concentration likely correlates with higher population density, increased traffic volume, and more complex road networks typical of major city centers.
+
+While accident density generally decreases towards the outskirts, there are notable hotspots in the peripheral areas surrounding Bangkok. These could represent key transportation corridors or rapidly developing suburban zones with high traffic flow.
+
+The skewed distribution of accident densities, as shown in the legend, highlights the presence of extreme hotspots amid generally moderate-to-high risk areas. This pattern underscores the need for targeted interventions in specific high-risk locations while also addressing broader regional safety concerns. We should look into them.
