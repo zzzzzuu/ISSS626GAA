@@ -198,6 +198,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li><a href="#data-wrangling-1-correct-coordinate-reference-system" id="toc-data-wrangling-1-correct-coordinate-reference-system" class="nav-link" data-scroll-target="#data-wrangling-1-correct-coordinate-reference-system">Data Wrangling 1: Correct Coordinate Reference System</a></li>
   <li><a href="#check-date-and-time-format-posixct" id="toc-check-date-and-time-format-posixct" class="nav-link" data-scroll-target="#check-date-and-time-format-posixct">Check date and time format (POSIXct)</a></li>
   <li><a href="#data-wrangling-2-filtering-to-a-smaller-subset-of-data" id="toc-data-wrangling-2-filtering-to-a-smaller-subset-of-data" class="nav-link" data-scroll-target="#data-wrangling-2-filtering-to-a-smaller-subset-of-data">Data Wrangling 2: Filtering to a smaller subset of data</a></li>
+  <li><a href="#converting-multilinestrings-to-linestrings" id="toc-converting-multilinestrings-to-linestrings" class="nav-link" data-scroll-target="#converting-multilinestrings-to-linestrings">Converting MULTILINESTRINGs to LINESTRINGs</a></li>
+  <li><a href="#write-a-smaller-subset-of-the-data-for-easier-compute-times" id="toc-write-a-smaller-subset-of-the-data-for-easier-compute-times" class="nav-link" data-scroll-target="#write-a-smaller-subset-of-the-data-for-easier-compute-times">Write a smaller subset of the data for easier compute times</a></li>
   </ul></li>
   </ul>
 </nav>
@@ -309,6 +311,94 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <section id="data-wrangling-2-filtering-to-a-smaller-subset-of-data" class="level2">
 <h2 class="anchored" data-anchor-id="data-wrangling-2-filtering-to-a-smaller-subset-of-data">Data Wrangling 2: Filtering to a smaller subset of data</h2>
 <p>The initial datasets cover all of Thailand and include various road types. To focus on the Bangkok Metropolitan Region (BMR), a spatial filter is applied to extract data for Bangkok and its five adjacent provinces: Nakhon Pathom, Pathum Thani, Nonthaburi, Samut Prakan, and Samut Sakhon. This step reduces data volume and ensures geographic relevance. Additionally, the road network data is filtered to include only roads accessible to motor vehicles, excluding roads like pedestrian paths and cycling lanes. These filtering processes enhance the accuracy of the subsequent analysis by focusing on relevant geographic areas and road types where motor vehicle accidents are likely to occur.</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>bangkok_areas <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"Bangkok"</span>,</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>                   <span class="st">"Nonthaburi"</span>,</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>                   <span class="st">"Samut Prakan"</span>,</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>                   <span class="st">"Pathum Thani"</span>,</span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>                   <span class="st">"Samut Sakhon"</span>,</span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>                   <span class="st">"Nakhon Pathom"</span>)</span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>admin_sf_bkk <span class="ot">&lt;-</span> admin_sf <span class="sc">%&gt;%</span></span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(ADM1_EN) <span class="sc">&amp;</span> ADM1_EN <span class="sc">%in%</span> bangkok_areas)</span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a><span class="fu">unique</span>(admin_sf_bkk<span class="sc">$</span>ADM1_EN)     <span class="co">#check</span></span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(<span class="fu">st_geometry</span>(admin_sf_bkk))  <span class="co">#check</span></span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a><span class="fu">st_geometry_type</span>(admin_sf_bkk)   <span class="co">#check</span></span>
+<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a>rdacc_sf_bkk <span class="ot">&lt;-</span> rdacc_sf <span class="sc">%&gt;%</span></span>
+<span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(province_en) <span class="sc">&amp;</span> province_en <span class="sc">%in%</span> bangkok_areas)</span>
+<span id="cb5-16"><a href="#cb5-16" aria-hidden="true" tabindex="-1"></a><span class="fu">unique</span>(rdacc_sf_bkk<span class="sc">$</span>province_en) <span class="co">#check</span></span>
+<span id="cb5-17"><a href="#cb5-17" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(<span class="fu">st_geometry</span>(rdacc_sf_bkk))  <span class="co">#check</span></span>
+<span id="cb5-18"><a href="#cb5-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-19"><a href="#cb5-19" aria-hidden="true" tabindex="-1"></a>roads_sf_bkk <span class="ot">&lt;-</span> <span class="fu">st_intersection</span>(roads_sf, admin_sf_bkk)</span>
+<span id="cb5-20"><a href="#cb5-20" aria-hidden="true" tabindex="-1"></a><span class="fu">unique</span>(roads_sf_bkk<span class="sc">$</span>highway)     <span class="co">#check</span></span>
+<span id="cb5-21"><a href="#cb5-21" aria-hidden="true" tabindex="-1"></a>roads_sf_bkk_veh <span class="ot">&lt;-</span> roads_sf_bkk <span class="sc">%&gt;%</span></span>
+<span id="cb5-22"><a href="#cb5-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(highway) <span class="sc">&amp;</span> </span>
+<span id="cb5-23"><a href="#cb5-23" aria-hidden="true" tabindex="-1"></a>           <span class="sc">!</span>(highway <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">"pedestrian"</span>,</span>
+<span id="cb5-24"><a href="#cb5-24" aria-hidden="true" tabindex="-1"></a>                            <span class="st">"bridleway"</span>,</span>
+<span id="cb5-25"><a href="#cb5-25" aria-hidden="true" tabindex="-1"></a>                            <span class="st">"cycleway"</span>,</span>
+<span id="cb5-26"><a href="#cb5-26" aria-hidden="true" tabindex="-1"></a>                            <span class="st">"footway"</span>,</span>
+<span id="cb5-27"><a href="#cb5-27" aria-hidden="true" tabindex="-1"></a>                            <span class="st">"steps"</span>,</span>
+<span id="cb5-28"><a href="#cb5-28" aria-hidden="true" tabindex="-1"></a>                            <span class="st">"path"</span>)))</span>
+<span id="cb5-29"><a href="#cb5-29" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(<span class="fu">st_geometry</span>(roads_sf_bkk_veh)) <span class="co">#check</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Thailand Highway Classification
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Refer to https://wiki.openstreetmap.org/wiki/WikiProject_Thailand#Highway_classification for definitions of different roads and access that is legally allowed.</p>
+</div>
+</div>
+</section>
+<section id="converting-multilinestrings-to-linestrings" class="level2">
+<h2 class="anchored" data-anchor-id="converting-multilinestrings-to-linestrings">Converting MULTILINESTRINGs to LINESTRINGs</h2>
+<p>The road network data contains both linestrings and multilinestrings. Multilinestrings represent complex road segments with multiple connected lines, while linestrings are single, continuous lines. Converting all geometries to linestrings simplifies the data structure, ensuring uniformity across the dataset, and makes it easier for lixelisation. This conversion is necessary for consistent analysis, as many spatial operations work more efficiently with simple linestring geometries.</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>geometry_types <span class="ot">&lt;-</span> roads_sf_bkk_veh <span class="sc">%&gt;%</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">st_geometry_type</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as.character</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">unique</span>()</span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span>(<span class="fu">length</span>(geometry_types) <span class="sc">==</span> <span class="dv">1</span> <span class="sc">&amp;&amp;</span> geometry_types <span class="sc">==</span> <span class="st">"LINESTRING"</span>) {</span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">print</span>(<span class="st">"All geometries are LINESTRING"</span>)</span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>} <span class="cf">else</span> {</span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">print</span>(<span class="st">"Not all geometries are LINESTRING. Types found:"</span>)</span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">print</span>(geometry_types)</span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>roads_sf_bkk_veh_ls <span class="ot">&lt;-</span> roads_sf_bkk_veh <span class="sc">%&gt;%</span></span>
+<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">st_cast</span>(<span class="st">"MULTILINESTRING"</span>, <span class="at">group_or_split =</span> <span class="cn">TRUE</span>) <span class="sc">%&gt;%</span>  </span>
+<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">st_cast</span>(<span class="st">"LINESTRING"</span>)</span>
+<span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-18"><a href="#cb6-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-19"><a href="#cb6-19" aria-hidden="true" tabindex="-1"></a>geometry_types <span class="ot">&lt;-</span> roads_sf_bkk_veh_ls <span class="sc">%&gt;%</span></span>
+<span id="cb6-20"><a href="#cb6-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">st_geometry_type</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb6-21"><a href="#cb6-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as.character</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb6-22"><a href="#cb6-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">unique</span>()</span>
+<span id="cb6-23"><a href="#cb6-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-24"><a href="#cb6-24" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span>(<span class="fu">length</span>(geometry_types) <span class="sc">==</span> <span class="dv">1</span> <span class="sc">&amp;&amp;</span> geometry_types <span class="sc">==</span> <span class="st">"LINESTRING"</span>) {</span>
+<span id="cb6-25"><a href="#cb6-25" aria-hidden="true" tabindex="-1"></a>  <span class="fu">print</span>(<span class="st">"All geometries are LINESTRING"</span>)</span>
+<span id="cb6-26"><a href="#cb6-26" aria-hidden="true" tabindex="-1"></a>} <span class="cf">else</span> {</span>
+<span id="cb6-27"><a href="#cb6-27" aria-hidden="true" tabindex="-1"></a>  <span class="fu">print</span>(<span class="st">"Not all geometries are LINESTRING. Types found:"</span>)</span>
+<span id="cb6-28"><a href="#cb6-28" aria-hidden="true" tabindex="-1"></a>  <span class="fu">print</span>(geometry_types)</span>
+<span id="cb6-29"><a href="#cb6-29" aria-hidden="true" tabindex="-1"></a>}</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+</section>
+<section id="write-a-smaller-subset-of-the-data-for-easier-compute-times" class="level2">
+<h2 class="anchored" data-anchor-id="write-a-smaller-subset-of-the-data-for-easier-compute-times">Write a smaller subset of the data for easier compute times</h2>
+<p>This segment makes our data smaller and easier to work with. It is savedin a special format (RDS) in a ‘sandbox’ folder. This helps my computer run faster and keeps the project tidy. I used commands to save and load data, and tell some parts of our code not to run again if not needed.</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="fu">write_rds</span>(roads_sf_bkk_veh_ls, <span class="st">"data/sandbox/roads.rds"</span>)</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="fu">write_rds</span>(rdacc_sf_bkk, <span class="st">"data/sandbox/rdacc.rds"</span>)</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="fu">write_rds</span>(admin_sf_bkk, <span class="st">"data/sandbox/admin.rds"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
 
 
 </section>

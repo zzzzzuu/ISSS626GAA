@@ -90,3 +90,92 @@ The incident_datetime and report_datetime fields are stored in POSIXct format, a
 ## Data Wrangling 2: Filtering to a smaller subset of data
 
 The initial datasets cover all of Thailand and include various road types. To focus on the Bangkok Metropolitan Region (BMR), a spatial filter is applied to extract data for Bangkok and its five adjacent provinces: Nakhon Pathom, Pathum Thani, Nonthaburi, Samut Prakan, and Samut Sakhon. This step reduces data volume and ensures geographic relevance. Additionally, the road network data is filtered to include only roads accessible to motor vehicles, excluding roads like pedestrian paths and cycling lanes. These filtering processes enhance the accuracy of the subsequent analysis by focusing on relevant geographic areas and road types where motor vehicle accidents are likely to occur.
+
+```{r}
+#| eval: false
+bangkok_areas <- c("Bangkok",
+                   "Nonthaburi",
+                   "Samut Prakan",
+                   "Pathum Thani",
+                   "Samut Sakhon",
+                   "Nakhon Pathom")
+
+admin_sf_bkk <- admin_sf %>%
+  filter(!is.na(ADM1_EN) & ADM1_EN %in% bangkok_areas)
+unique(admin_sf_bkk$ADM1_EN)     #check
+plot(st_geometry(admin_sf_bkk))  #check
+st_geometry_type(admin_sf_bkk)   #check
+
+rdacc_sf_bkk <- rdacc_sf %>%
+  filter(!is.na(province_en) & province_en %in% bangkok_areas)
+unique(rdacc_sf_bkk$province_en) #check
+plot(st_geometry(rdacc_sf_bkk))  #check
+
+roads_sf_bkk <- st_intersection(roads_sf, admin_sf_bkk)
+unique(roads_sf_bkk$highway)     #check
+roads_sf_bkk_veh <- roads_sf_bkk %>%
+  filter(!is.na(highway) & 
+           !(highway %in% c("pedestrian",
+                            "bridleway",
+                            "cycleway",
+                            "footway",
+                            "steps",
+                            "path")))
+plot(st_geometry(roads_sf_bkk_veh)) #check
+
+```
+
+::: callout-tip
+## Thailand Highway Classification
+
+Refer to https://wiki.openstreetmap.org/wiki/WikiProject_Thailand#Highway_classification for definitions of different roads and access that is legally allowed.
+:::
+
+## Converting MULTILINESTRINGs to LINESTRINGs
+
+The road network data contains both linestrings and multilinestrings. Multilinestrings represent complex road segments with multiple connected lines, while linestrings are single, continuous lines. Converting all geometries to linestrings simplifies the data structure, ensuring uniformity across the dataset, and makes it easier for lixelisation. This conversion is necessary for consistent analysis, as many spatial operations work more efficiently with simple linestring geometries.
+
+```{r}
+#| eval: false
+geometry_types <- roads_sf_bkk_veh %>%
+  st_geometry_type() %>%
+  as.character() %>%
+  unique()
+
+if(length(geometry_types) == 1 && geometry_types == "LINESTRING") {
+  print("All geometries are LINESTRING")
+} else {
+  print("Not all geometries are LINESTRING. Types found:")
+  print(geometry_types)
+}
+
+
+roads_sf_bkk_veh_ls <- roads_sf_bkk_veh %>%
+  st_cast("MULTILINESTRING", group_or_split = TRUE) %>%  
+  st_cast("LINESTRING")
+
+
+geometry_types <- roads_sf_bkk_veh_ls %>%
+  st_geometry_type() %>%
+  as.character() %>%
+  unique()
+
+if(length(geometry_types) == 1 && geometry_types == "LINESTRING") {
+  print("All geometries are LINESTRING")
+} else {
+  print("Not all geometries are LINESTRING. Types found:")
+  print(geometry_types)
+}
+```
+
+## Write a smaller subset of the data for easier compute times
+
+This segment makes our data smaller and easier to work with. It is savedin a special format (RDS) in a 'sandbox' folder. This helps my computer run faster and keeps the project tidy. I used commands to save and load data, and tell some parts of our code not to run again if not needed.
+
+```{r}
+#| eval: false
+write_rds(roads_sf_bkk_veh_ls, "data/sandbox/roads.rds")
+write_rds(rdacc_sf_bkk, "data/sandbox/rdacc.rds")
+write_rds(admin_sf_bkk, "data/sandbox/admin.rds")
+
+```
