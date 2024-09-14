@@ -179,3 +179,44 @@ write_rds(rdacc_sf_bkk, "data/sandbox/rdacc.rds")
 write_rds(admin_sf_bkk, "data/sandbox/admin.rds")
 
 ```
+
+```{r}
+roads <- read_rds("data/sandbox/roads.rds")
+rdacc <- read_rds("data/sandbox/rdacc.rds")
+admin <- read_rds("data/sandbox/admin.rds")
+```
+
+# Analysis
+
+Roads dataset is still too dense. It is difficult to make meaningful insights out of it, so we will drop more, smaller roads.
+
+```{r}
+unique(roads$highway)
+roads_filtered <- roads %>%
+  filter(!is.na(highway) & 
+           (highway %in% c("secondary",
+                           "secondary_link",
+                           "primary",
+                           "primary_link",
+                           "trunk_link",
+                           "trunk",
+                           "motorway",
+                           "motorway_link",
+                           "tertiary_link",
+                           "tertiary")))
+plot(st_geometry(roads_filtered))
+```
+
+```{r}
+#| eval: false
+tmap_mode('plot')
+tm_shape(rdacc) +
+  tm_dots(col = "red", size = 0.1) +
+  tm_shape(roads_filtered) +
+  tm_lines()
+```
+
+```{r}
+#| eval: false
+tmap_mode('plot')
+```
