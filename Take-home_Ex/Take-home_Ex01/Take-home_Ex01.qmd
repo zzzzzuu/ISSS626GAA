@@ -261,7 +261,6 @@ write_rds(lixels, "data/sandbox/lixels.rds")
 write_rds(samples, "data/sandbox/samples.rds")
 ```
 
-
 ```{r}
 lixels <- read_rds("data/sandbox/lixels.rds")
 samples <- read_rds("data/sandbox/samples.rds")
@@ -295,8 +294,8 @@ tm_shape(lixels) +
            breaks = custom_breaks,
            palette = "YlOrRd",
            lwd = 1.5)+
-  tm_shape(admin) +  # Add this line
-  tm_borders(col = "black", lwd = 2, alpha = 0.5)  # And this line
+  tm_shape(admin) +  
+  tm_borders(col = "black", lwd = 2, alpha = 0.5)
 
 
 
