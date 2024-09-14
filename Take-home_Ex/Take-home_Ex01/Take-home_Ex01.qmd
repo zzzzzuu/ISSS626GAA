@@ -277,6 +277,7 @@ Let's try to plot it.
 ## Overall situation of road accidents in BMR
 
 ```{r}
+#| eval: false
 lixels$display_name <- ifelse(is.na(lixels$name_en), 
                               paste(lixels$highway,": Unnamed Road"),
                               paste(lixels$highway,": ",lixels$name_en))
@@ -296,8 +297,12 @@ tm_shape(lixels) +
   tm_shape(admin) +  # Add this line
   tm_borders(col = "black", lwd = 2, alpha = 0.5)  # And this line
 
-tmap_mode('plot')
 
+
+```
+
+```{r}
+tmap_mode('plot')
 ```
 
 The accident density map of Bangkok and its surrounding provinces reveals significant patterns in road safety across the region. The central area, primarily Bangkok, exhibits the highest concentration of accident hotspots, indicating a greater risk in the urban core. This concentration likely correlates with higher population density, increased traffic volume, and more complex road networks typical of major city centers.
@@ -305,3 +310,7 @@ The accident density map of Bangkok and its surrounding provinces reveals signif
 While accident density generally decreases towards the outskirts, there are notable hotspots in the peripheral areas surrounding Bangkok. These could represent key transportation corridors or rapidly developing suburban zones with high traffic flow.
 
 The skewed distribution of accident densities, as shown in the legend, highlights the presence of extreme hotspots amid generally moderate-to-high risk areas. This pattern underscores the need for targeted interventions in specific high-risk locations while also addressing broader regional safety concerns. We should look into them.
+
+## Creating date and time analysis
+
+WIP
