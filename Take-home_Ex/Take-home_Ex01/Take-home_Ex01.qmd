@@ -282,7 +282,7 @@ lixels$display_name <- ifelse(is.na(lixels$name_en),
                               paste(lixels$highway,": Unnamed Road"),
                               paste(lixels$highway,": ",lixels$name_en))
 
-tmap_mode('view')
+tmap_mode('plot')
 custom_breaks <- c(0, quantile(lixels$density, c(0.85, 
                                                  0.9, 
                                                  0.95,
