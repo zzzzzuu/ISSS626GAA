@@ -260,3 +260,58 @@ The values seem small. The measurements must be in metres. Let's correct that to
 write_rds(lixels, "data/sandbox/lixels.rds")
 write_rds(samples, "data/sandbox/samples.rds")
 ```
+
+
+```{r}
+lixels <- read_rds("data/sandbox/lixels.rds")
+samples <- read_rds("data/sandbox/samples.rds")
+samples$density <- samples$density*1000
+lixels$density <- lixels$density*1000
+summary(samples$density)
+summary(lixels$density)
+```
+
+That looks better. Seems that the hotspots are quite scant and concentrated at the top. It would be good to merge everything below the mean, while having more granular breaks in the top quartile to examine the hot spots in more detail.
+
+Let's try to plot it.
+
+## Overall situation of road accidents in BMR
+
+```{r}
+#| eval: false
+lixels$display_name <- ifelse(is.na(lixels$name_en), 
+                              paste(lixels$highway,": Unnamed Road"),
+                              paste(lixels$highway,": ",lixels$name_en))
+
+tmap_mode('view')
+custom_breaks <- c(0, quantile(lixels$density, c(0.85, 
+                                                 0.9, 
+                                                 0.95,
+                                                 0.99, 
+                                                 1)))
+tm_shape(lixels) +
+  tm_lines(col = "density",
+           id = "display_name",
+           breaks = custom_breaks,
+           palette = "YlOrRd",
+           lwd = 1.5)+
+  tm_shape(admin) +  # Add this line
+  tm_borders(col = "black", lwd = 2, alpha = 0.5)  # And this line
+
+
+
+```
+
+```{r}
+tmap_mode('plot')
+```
+
+The accident density map of Bangkok and its surrounding provinces reveals significant patterns in road safety across the region. The central area, primarily Bangkok, exhibits the highest concentration of accident hotspots, indicating a greater risk in the urban core. This concentration likely correlates with higher population density, increased traffic volume, and more complex road networks typical of major city centers.
+
+While accident density generally decreases towards the outskirts, there are notable hotspots in the peripheral areas surrounding Bangkok. These could represent key transportation corridors or rapidly developing suburban zones with high traffic flow.
+
+The skewed distribution of accident densities, as shown in the legend, highlights the presence of extreme hotspots amid generally moderate-to-high risk areas. This pattern underscores the need for targeted interventions in specific high-risk locations while also addressing broader regional safety concerns. We should look into them.
+
+## Creating date and time analysis
+
+WIP
