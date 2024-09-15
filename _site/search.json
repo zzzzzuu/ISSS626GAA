@@ -404,5 +404,68 @@
     "title": "Take-home Exercise 1",
     "section": "Creating date and time analysis",
     "text": "Creating date and time analysis\nWIP"
+  },
+  {
+    "objectID": "Hands-on_Ex/Hands-on_Ex04/Hands-on_Ex04.html",
+    "href": "Hands-on_Ex/Hands-on_Ex04/Hands-on_Ex04.html",
+    "title": "Hands-on Exercise 04",
+    "section": "",
+    "text": "pacman::p_load(sf, spdep, tmap, tidyverse, knitr)\n\n\n\n\n\nhunan &lt;- st_read(dsn = \"data/geospatial\", \n                 layer = \"Hunan\")\n\nReading layer `Hunan' from data source \n  `C:\\zzzzzuu\\ISSS626GAA\\Hands-on_Ex\\Hands-on_Ex04\\data\\geospatial' \n  using driver `ESRI Shapefile'\nSimple feature collection with 88 features and 7 fields\nGeometry type: POLYGON\nDimension:     XY\nBounding box:  xmin: 108.7831 ymin: 24.6342 xmax: 114.2544 ymax: 30.12812\nGeodetic CRS:  WGS 84\n\nhunan2012 &lt;- read_csv(\"data/aspatial/Hunan_2012.csv\")\n\nRows: 88 Columns: 29\n── Column specification ────────────────────────────────────────────────────────\nDelimiter: \",\"\nchr  (2): County, City\ndbl (27): avg_wage, deposite, FAI, Gov_Rev, Gov_Exp, GDP, GDPPC, GIO, Loan, ...\n\nℹ Use `spec()` to retrieve the full column specification for this data.\nℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.\n\n\n\n\n\n\nhunan &lt;- left_join(hunan, hunan2012) %&gt;%\n  dplyr::select(1:4, 7, 15)\n\nJoining with `by = join_by(County)`"
+  },
+  {
+    "objectID": "Hands-on_Ex/Hands-on_Ex04/Hands-on_Ex04.html#load-packages",
+    "href": "Hands-on_Ex/Hands-on_Ex04/Hands-on_Ex04.html#load-packages",
+    "title": "Hands-on Exercise 04",
+    "section": "",
+    "text": "pacman::p_load(sf, spdep, tmap, tidyverse, knitr)"
+  },
+  {
+    "objectID": "Hands-on_Ex/Hands-on_Ex04/Hands-on_Ex04.html#importing-data",
+    "href": "Hands-on_Ex/Hands-on_Ex04/Hands-on_Ex04.html#importing-data",
+    "title": "Hands-on Exercise 04",
+    "section": "",
+    "text": "hunan &lt;- st_read(dsn = \"data/geospatial\", \n                 layer = \"Hunan\")\n\nReading layer `Hunan' from data source \n  `C:\\zzzzzuu\\ISSS626GAA\\Hands-on_Ex\\Hands-on_Ex04\\data\\geospatial' \n  using driver `ESRI Shapefile'\nSimple feature collection with 88 features and 7 fields\nGeometry type: POLYGON\nDimension:     XY\nBounding box:  xmin: 108.7831 ymin: 24.6342 xmax: 114.2544 ymax: 30.12812\nGeodetic CRS:  WGS 84\n\nhunan2012 &lt;- read_csv(\"data/aspatial/Hunan_2012.csv\")\n\nRows: 88 Columns: 29\n── Column specification ────────────────────────────────────────────────────────\nDelimiter: \",\"\nchr  (2): County, City\ndbl (27): avg_wage, deposite, FAI, Gov_Rev, Gov_Exp, GDP, GDPPC, GIO, Loan, ...\n\nℹ Use `spec()` to retrieve the full column specification for this data.\nℹ Specify the column types or set `show_col_types = FALSE` to quiet this message."
+  },
+  {
+    "objectID": "Hands-on_Ex/Hands-on_Ex04/Hands-on_Ex04.html#left-join",
+    "href": "Hands-on_Ex/Hands-on_Ex04/Hands-on_Ex04.html#left-join",
+    "title": "Hands-on Exercise 04",
+    "section": "",
+    "text": "hunan &lt;- left_join(hunan, hunan2012) %&gt;%\n  dplyr::select(1:4, 7, 15)\n\nJoining with `by = join_by(County)`"
+  },
+  {
+    "objectID": "Hands-on_Ex/Hands-on_Ex04/Hands-on_Ex04.html#computing-queen",
+    "href": "Hands-on_Ex/Hands-on_Ex04/Hands-on_Ex04.html#computing-queen",
+    "title": "Hands-on Exercise 04",
+    "section": "Computing QUEEN",
+    "text": "Computing QUEEN\n\nwm_q &lt;- poly2nb(hunan, queen=TRUE)\nsummary(wm_q)\n\nNeighbour list object:\nNumber of regions: 88 \nNumber of nonzero links: 448 \nPercentage nonzero weights: 5.785124 \nAverage number of links: 5.090909 \nLink number distribution:\n\n 1  2  3  4  5  6  7  8  9 11 \n 2  2 12 16 24 14 11  4  2  1 \n2 least connected regions:\n30 65 with 1 link\n1 most connected region:\n85 with 11 links\n\n\nThe summary report above shows that there are 88 area units in Hunan. The most connected area unit has 11 neighbours. There are two area units with only one heighbours.\nFor each polygon in our polygon object, wm_q lists all neighboring polygons. For example, to see the neighbors for the first polygon in the object, type:\n\nwm_q[[1]]\n\n[1]  2  3  4 57 85\n\n\nPolygon 1 has 5 neighbors. The numbers represent the polygon IDs as stored in hunan SpatialPolygonsDataFrame class.\nWe can retrive the county name of Polygon ID=1 by using the code chunk below:\n\nhunan$County[1]\n\n[1] \"Anxiang\"\n\n\nTo reveal the county names of the five neighboring polygons, the code chunk will be used, then we can retrieve the GDPPC of these five countries by using the code chunk below.\n\nhunan$NAME_3[c(2,3,4,57,85)]\n\n[1] \"Hanshou\" \"Jinshi\"  \"Li\"      \"Nan\"     \"Taoyuan\"\n\nnb1 &lt;- wm_q[[1]]\nnb1 &lt;- hunan$GDPPC[nb1]\nnb1\n\n[1] 20981 34592 24473 21311 22879"
+  },
+  {
+    "objectID": "Hands-on_Ex/Hands-on_Ex04/Hands-on_Ex04.html#computing-rook",
+    "href": "Hands-on_Ex/Hands-on_Ex04/Hands-on_Ex04.html#computing-rook",
+    "title": "Hands-on Exercise 04",
+    "section": "Computing ROOK",
+    "text": "Computing ROOK\n\nwm_r &lt;- poly2nb(hunan, queen=FALSE)\nsummary(wm_r)\n\nNeighbour list object:\nNumber of regions: 88 \nNumber of nonzero links: 440 \nPercentage nonzero weights: 5.681818 \nAverage number of links: 5 \nLink number distribution:\n\n 1  2  3  4  5  6  7  8  9 10 \n 2  2 12 20 21 14 11  3  2  1 \n2 least connected regions:\n30 65 with 1 link\n1 most connected region:\n85 with 10 links\n\n\n\nVisualising contiguity weights\n\nlongitude &lt;- map_dbl(hunan$geometry, ~st_centroid(.x)[[1]])\nlatitude &lt;- map_dbl(hunan$geometry, ~st_centroid(.x)[[2]])\ncoords &lt;- cbind(longitude, latitude)\nhead(coords)\n\n     longitude latitude\n[1,]  112.1531 29.44362\n[2,]  112.0372 28.86489\n[3,]  111.8917 29.47107\n[4,]  111.7031 29.74499\n[5,]  111.6138 29.49258\n[6,]  111.0341 29.79863\n\nplot(hunan$geometry, border=\"lightgrey\")\nplot(wm_q, coords, pch = 19, cex = 0.6, add = TRUE, col= \"red\")\n\n\n\n\n\nplot(hunan$geometry, border=\"lightgrey\")\nplot(wm_r, coords, pch = 19, cex = 0.6, add = TRUE, col = \"red\")"
+  },
+  {
+    "objectID": "Hands-on_Ex/Hands-on_Ex04/Hands-on_Ex04.html#a-look-at-queen-and-rook-contiguity",
+    "href": "Hands-on_Ex/Hands-on_Ex04/Hands-on_Ex04.html#a-look-at-queen-and-rook-contiguity",
+    "title": "Hands-on Exercise 04",
+    "section": "A look at queen and rook contiguity",
+    "text": "A look at queen and rook contiguity\n\npar(mfrow=c(1,2))\nplot(hunan$geometry, border=\"lightgrey\", main=\"Queen Contiguity\")\nplot(wm_q, coords, pch = 19, cex = 0.6, add = TRUE, col= \"red\")\nplot(hunan$geometry, border=\"lightgrey\", main=\"Rook Contiguity\")\nplot(wm_r, coords, pch = 19, cex = 0.6, add = TRUE, col = \"red\")"
+  },
+  {
+    "objectID": "Hands-on_Ex/Hands-on_Ex04/Hands-on_Ex04.html#cut-off-distance",
+    "href": "Hands-on_Ex/Hands-on_Ex04/Hands-on_Ex04.html#cut-off-distance",
+    "title": "Hands-on Exercise 04",
+    "section": "Cut off distance",
+    "text": "Cut off distance\n\n#coords &lt;- coordinates(hunan)\nk1 &lt;- knn2nb(knearneigh(coords))\nk1dists &lt;- unlist(nbdists(k1, coords, longlat = TRUE))\nsummary(k1dists)\n\n   Min. 1st Qu.  Median    Mean 3rd Qu.    Max. \n  24.79   32.57   38.01   39.07   44.52   61.79"
+  },
+  {
+    "objectID": "Hands-on_Ex/Hands-on_Ex04/Hands-on_Ex04.html#computing-fixed-distance-weight-matrix",
+    "href": "Hands-on_Ex/Hands-on_Ex04/Hands-on_Ex04.html#computing-fixed-distance-weight-matrix",
+    "title": "Hands-on Exercise 04",
+    "section": "Computing fixed distance weight matrix",
+    "text": "Computing fixed distance weight matrix\n\nwm_d62 &lt;- dnearneigh(coords, 0, 62, longlat = TRUE)\nwm_d62\n\nNeighbour list object:\nNumber of regions: 88 \nNumber of nonzero links: 324 \nPercentage nonzero weights: 4.183884 \nAverage number of links: 3.681818 \n\n\nThe value 3.681818 means that, on average, each region in the dataset has approximately 3.68 neighbours. This is derived by dividing the total number of links (324) by the number of regions (88). Some regions may have more or fewer neighbours, but on average, they each have about 3.68 connections with other regions.\n\ntable(hunan$County, card(wm_d62))\n\n               \n                1 2 3 4 5 6\n  Anhua         1 0 0 0 0 0\n  Anren         0 0 0 1 0 0\n  Anxiang       0 0 0 0 1 0\n  Baojing       0 0 0 0 1 0\n  Chaling       0 0 1 0 0 0\n  Changning     0 0 1 0 0 0\n  Changsha      0 0 0 1 0 0\n  Chengbu       0 1 0 0 0 0\n  Chenxi        0 0 0 1 0 0\n  Cili          0 1 0 0 0 0\n  Dao           0 0 0 1 0 0\n  Dongan        0 0 1 0 0 0\n  Dongkou       0 0 0 1 0 0\n  Fenghuang     0 0 0 1 0 0\n  Guidong       0 0 1 0 0 0\n  Guiyang       0 0 0 1 0 0\n  Guzhang       0 0 0 0 0 1\n  Hanshou       0 0 0 1 0 0\n  Hengdong      0 0 0 0 1 0\n  Hengnan       0 0 0 0 1 0\n  Hengshan      0 0 0 0 0 1\n  Hengyang      0 0 0 0 0 1\n  Hongjiang     0 0 0 0 1 0\n  Huarong       0 0 0 1 0 0\n  Huayuan       0 0 0 1 0 0\n  Huitong       0 0 0 1 0 0\n  Jiahe         0 0 0 0 1 0\n  Jianghua      0 0 1 0 0 0\n  Jiangyong     0 1 0 0 0 0\n  Jingzhou      0 1 0 0 0 0\n  Jinshi        0 0 0 1 0 0\n  Jishou        0 0 0 0 0 1\n  Lanshan       0 0 0 1 0 0\n  Leiyang       0 0 0 1 0 0\n  Lengshuijiang 0 0 1 0 0 0\n  Li            0 0 1 0 0 0\n  Lianyuan      0 0 0 0 1 0\n  Liling        0 1 0 0 0 0\n  Linli         0 0 0 1 0 0\n  Linwu         0 0 0 1 0 0\n  Linxiang      1 0 0 0 0 0\n  Liuyang       0 1 0 0 0 0\n  Longhui       0 0 1 0 0 0\n  Longshan      0 1 0 0 0 0\n  Luxi          0 0 0 0 1 0\n  Mayang        0 0 0 0 0 1\n  Miluo         0 0 0 0 1 0\n  Nan           0 0 0 0 1 0\n  Ningxiang     0 0 0 1 0 0\n  Ningyuan      0 0 0 0 1 0\n  Pingjiang     0 1 0 0 0 0\n  Qidong        0 0 1 0 0 0\n  Qiyang        0 0 1 0 0 0\n  Rucheng       0 1 0 0 0 0\n  Sangzhi       0 1 0 0 0 0\n  Shaodong      0 0 0 0 1 0\n  Shaoshan      0 0 0 0 1 0\n  Shaoyang      0 0 0 1 0 0\n  Shimen        1 0 0 0 0 0\n  Shuangfeng    0 0 0 0 0 1\n  Shuangpai     0 0 0 1 0 0\n  Suining       0 0 0 0 1 0\n  Taojiang      0 1 0 0 0 0\n  Taoyuan       0 1 0 0 0 0\n  Tongdao       0 1 0 0 0 0\n  Wangcheng     0 0 0 1 0 0\n  Wugang        0 0 1 0 0 0\n  Xiangtan      0 0 0 1 0 0\n  Xiangxiang    0 0 0 0 1 0\n  Xiangyin      0 0 0 1 0 0\n  Xinhua        0 0 0 0 1 0\n  Xinhuang      1 0 0 0 0 0\n  Xinning       0 1 0 0 0 0\n  Xinshao       0 0 0 0 0 1\n  Xintian       0 0 0 0 1 0\n  Xupu          0 1 0 0 0 0\n  Yanling       0 0 1 0 0 0\n  Yizhang       1 0 0 0 0 0\n  Yongshun      0 0 0 1 0 0\n  Yongxing      0 0 0 1 0 0\n  You           0 0 0 1 0 0\n  Yuanjiang     0 0 0 0 1 0\n  Yuanling      1 0 0 0 0 0\n  Yueyang       0 0 1 0 0 0\n  Zhijiang      0 0 0 0 1 0\n  Zhongfang     0 0 0 1 0 0\n  Zhuzhou       0 0 0 0 1 0\n  Zixing        0 0 1 0 0 0"
   }
 ]
