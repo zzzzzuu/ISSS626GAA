@@ -313,9 +313,7 @@ The skewed distribution of accident densities, as shown in the legend, highlight
 
 ## Temporal analysis of road accidents
 
-First we shall start with a visual analysis of when road accidents happen in BMR.
-
-To do this, we...
+In the following analysis, let's examine temporal patterns of road accidents in the Bangkok Metropolitan Region from 2019 to 2022. Let's visualize accident frequencies across different time scales, including hours of the day, days of the week, months, and years. This temporal breakdown will help identify high-risk periods influencing accident rates.
 
 ```{r}
 # Ensure datetime columns are properly formatted
@@ -407,127 +405,7 @@ ggplot(accident_counts, aes(x = hour, y = month, fill = n)) +
 
 It appears that Jan, Apr, Oct, Dec, but hotspots are different. Jan and Dec hotspots are in the morning peak, while Apr and Oct hotspots are in the evening peak.
 
-1.  Peak accident times:
-
-    -   
-
-    -   The highest concentration of accidents appears to occur between 3 PM and 9 PM across most months. This likely corresponds to evening rush hour traffic.
-
-    -   
-
-    -   There's also a noticeable increase in accidents during the morning hours, particularly around 6 AM to 9 AM, which likely corresponds to morning rush hour.
-
-    -   
-
-2.  
-
-3.  Seasonal patterns:
-
-    -   
-
-    -   December seems to have the highest overall accident rates, with intense activity throughout the day. This could be due to increased holiday traffic or year-end celebrations.
-
-    -   
-
-    -   April and May also show higher accident rates, particularly in the evening hours. This coincides with the Thai New Year (Songkran) in April, which often sees increased travel and celebrations.
-
-    -   
-
-4.  
-
-5.  Nighttime vs. daytime:
-
-    -   
-
-    -   Accidents are generally less frequent between midnight and 5 AM, as indicated by the darker colors during these hours.
-
-    -   
-
-    -   However, there are still notable accident occurrences during these early morning hours, especially in December and January. This could be related to late-night festivities or impaired driving.
-
-    -   
-
-6.  
-
-7.  Midday lull:
-
-    -   
-
-    -   There appears to be a slight decrease in accident frequency during midday hours (around 12 PM to 2 PM) for most months, possibly due to reduced traffic during lunch hours.
-
-    -   
-
-8.  
-
-9.  Weekend effect:
-
-    -   
-
-    -   While we can't distinguish weekdays from weekends in this visualization, the consistent patterns across all days suggest that traffic accidents are a daily concern, not just a weekday phenomenon.
-
-    -   
-
-10. 
-
-11. Yearly variations:
-
-    -   
-
-    -   Without separate data for each year, it's hard to determine if there are significant changes from 2019 to 2022. However, the consistent patterns suggest that these trends are relatively stable across the years.
-
-    -   
-
-12. 
-
-13. Anomalies:
-
-    -   
-
-    -   There are a few light gray spots in the heatmap (e.g., early morning in June, late evening in October). These could represent data anomalies or periods of unusually low accident rates that might warrant further investigation.
-
-    -   
-
-14. 
-
-15. High-risk periods:
-
-    -   
-
-    -   The combination of evening hours (6 PM to 9 PM) and months like December, April, and October seems to present the highest risk for accidents.
-
-    -   
-
-16. 
-
-Recommendations based on these insights:
-
 1.  
-
-2.  Increase traffic management and law enforcement during peak accident hours, especially during evening rush hours.
-
-3.  
-
-4.  Implement special safety measures during high-risk months like December and April, possibly including public awareness campaigns about holiday-related traffic risks.
-
-5.  
-
-6.  Investigate the causes of early morning accidents, particularly in December and January, and consider targeted interventions (e.g., increased DUI checkpoints).
-
-7.  
-
-8.  Develop strategies to maintain the relatively lower accident rates seen during midday hours, possibly by encouraging flexible work hours to distribute traffic more evenly.
-
-9.  
-
-10. Conduct further analysis to understand the factors contributing to the higher accident rates in specific months and times, such as weather conditions, special events, or traffic patterns.
-
-11. 
-
-12. Consider using this data to inform city planning decisions, such as improving road infrastructure or public transportation options during high-risk periods.
-
-13. 
-
-To gain even deeper insights, you might consider breaking this data down further by location within the Bangkok Metropolitan Region, type of accident, or severity of accidents. Additionally, comparing this data with other factors like weather conditions, major events, or changes in traffic laws could provide more context for the observed patterns.
 
 ```{r}
 rdacc_wday <- rdacc %>%
@@ -577,6 +455,7 @@ The CSR test is based on the assumption of the binomial point process which impl
 If this hypothesis is rejected, we may infer that the distribution of accidents are spatially interacting and dependent on each other; as a result, they may form nonrandom patterns.
 
 ```{r}
+#| eval: false
 rdacc_asspatial <- as_Spatial(rdacc)
 rdacc_sp <- as(rdacc_asspatial, "SpatialPoints")
 rdacc_ppp <- as.ppp(rdacc_sf)
@@ -594,6 +473,7 @@ tmap_mode('plot')
 ```
 
 ```{r}
+#| eval: false
 rdacc_ppp_jit <- rjitter(rdacc_ppp, 
                              retry=TRUE, 
                              nsim=1, 
@@ -603,6 +483,7 @@ plot(admin_owin)
 ```
 
 ```{r}
+#| eval: false
 # Apply jitter to the spatial coordinates
 rdacc_jittered <- st_jitter(rdacc, amount = 0.01)
 
@@ -620,6 +501,7 @@ kfun_rdacc <- kfunctions(roads_filtered,
 ```
 
 ```{r}
+#| eval: false
 kfun_rdacc$plotk
 ```
 
