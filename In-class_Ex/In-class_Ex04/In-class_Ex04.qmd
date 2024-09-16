@@ -15,7 +15,7 @@ execute:
 bw.gwr is the method to recommend the bandwidth to cut off, or if using adaptive distance, the optimal number of neighbours to get statistifically signifant insights as much as possible.
 
 ```{r}
-pacman::p_load(sf, spdep, tmap, tidyverse, knitr, GWmodel, ggstatsplot)
+pacman::p_load(sf, spdep, tmap, tidyverse, knitr, GWmodel, ggstatsplot, viridis)
 
 
 hunan_sf <- st_read(dsn = "data/geospatial", 
@@ -43,7 +43,7 @@ bw_CV <- bw.gwr(GDPPC ~ 1,
 ```
 
 ```{r}
-bw_CV <- bw.gwr(GDPPC ~ 1,
+bw_AIC <- bw.gwr(GDPPC ~ 1,
                 data = hunan_sp,
                 approach = "AIC",
                 adaptive = TRUE, #if this is false, then it's fixed bandwidth
@@ -52,3 +52,65 @@ bw_CV <- bw.gwr(GDPPC ~ 1,
 ```
 
 Starts with all (88), after that, it chips away the neighbours, to 22. And that's the optimal number of neighbours. Based on GDP per capita, the optimal neighbour is 22.
+
+If we use fix?
+```{r}
+bw_CV_fixed <- bw.gwr(GDPPC ~ 1,
+                data = hunan_sp,
+                approach = "CV",
+                adaptive = FALSE,
+                kernel = "bisquare",
+                longlat = T)
+```
+This determines fixed distance, and shows which one is best for the search. This is in KM.
+
+Let's take a look at AIC.
+
+```{r}
+bw_AIC_fixed <- bw.gwr(GDPPC ~ 1,
+                data = hunan_sp,
+                approach = "AIC",
+                adaptive = FALSE,
+                kernel = "bisquare",
+                longlat = T)
+```
+
+Distance is larger. Some geographical spaces are larger, resulting in discrepancy.
+
+```{r}
+gwstat <- gwss(data = hunan_sp,
+               vars = "GDPPC",
+               bw = bw_AIC,
+               kernel = "bisquare",
+               adaptive = TRUE,
+               longlat = T)
+```
+
+```{r}
+class(gwstat)
+```
+
+gwstat is a gwss object class. Special to GWmodel.
+we are interested in gwstst$SDF and "gwstat[["SDF"]]@data"
+
+GDPPC_LM is the local mean. LVar is the variance wrt the 22 neighbours, LCV is local correlation variance. LSKe is error. LSD is local standard deviation.
+
+In order to use it, we have to use two steps. pull the list out and convert into dataframe. And now append it.
+
+```{r}
+gwstat_df <- as.data.frame(gwstat$SDF)
+hunan_gstat <- cbind(hunan_sf, gwstat_df) #cbind is to append row by row. Sequence matters.
+```
+
+
+```{r}
+tm_shape(hunan_gstat) +
+  tm_polygons(col = "GDPPC_LM", 
+              style = "quantile",
+              title = "GDP per capita (with smoothing)",
+              palette = "YlOrRd") +
+  tm_layout(main.title = "Hunan Province GDP per capita",
+            main.title.size = 1.2,
+            legend.outside = TRUE,
+            legend.outside.position = "right")
+```
