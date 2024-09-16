@@ -107,10 +107,48 @@ hunan_gstat <- cbind(hunan_sf, gwstat_df) #cbind is to append row by row. Sequen
 tm_shape(hunan_gstat) +
   tm_polygons(col = "GDPPC_LM", 
               style = "quantile",
-              title = "GDP per capita (with smoothing)",
+              title = "GDP per capita (local mean)",
               palette = "YlOrRd") +
   tm_layout(main.title = "Hunan Province GDP per capita",
             main.title.size = 1.2,
             legend.outside = TRUE,
             legend.outside.position = "right")
+```
+
+# Correlation coeficient.
+
+Is there any relationship between GDP per capita and gross industry output?
+
+```{r}
+
+bw_AIC_cor <- bw.gwr(GDPPC ~ GIO,
+                data = hunan_sp,
+                approach = "AIC",
+                adaptive = TRUE, #if this is false, then it's fixed bandwidth
+                kernel = "bisquare",
+                longlat = T)
+
+gwstat_cor <- gwss(data = hunan_sp,
+               vars = c("GDPPC","GIO"),
+               bw = bw_AIC_cor,
+               kernel = "bisquare",
+               adaptive = TRUE,
+               longlat = T) 
+
+
+gwstat_cor_df <- as.data.frame(gwstat_cor$SDF) %>%
+  select(12,13)
+hunan_gstat_cor <- cbind(hunan_sf, gwstat_cor_df) #cbind is to append row by row. Sequence matters.
+
+
+#tm_shape(hunan_gstat_cor) +
+#  tm_polygons(col = "Spearman_rho_GDPCC.GIO", 
+#              style = "quantile",
+#              title = "Spearman Coefficient between GDPCC and GIO",
+#              palette = "YlOrRd") +
+#  tm_layout(main.title = "Coefficient Coefficient between GDPCC and GIO",
+#            main.title.size = 1.2,
+#            legend.outside = TRUE,
+#            legend.outside.position = "right")
+
 ```

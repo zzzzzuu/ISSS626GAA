@@ -196,6 +196,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
    
   <ul>
   <li><a href="#geographically-weighted-summary-statistics-gwmodel-methods" id="toc-geographically-weighted-summary-statistics-gwmodel-methods" class="nav-link active" data-scroll-target="#geographically-weighted-summary-statistics-gwmodel-methods">Geographically weighted summary statistics, gwModel methods</a></li>
+  <li><a href="#correlation-coeficient." id="toc-correlation-coeficient." class="nav-link" data-scroll-target="#correlation-coeficient.">Correlation coeficient.</a></li>
   </ul>
 </nav>
     </div>
@@ -409,7 +410,7 @@ Fixed bandwidth: 160.5517 AICc value: 1919.391 </code></pre>
 <div class="sourceCode cell-code" id="cb20"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="fu">tm_shape</span>(hunan_gstat) <span class="sc">+</span></span>
 <span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tm_polygons</span>(<span class="at">col =</span> <span class="st">"GDPPC_LM"</span>, </span>
 <span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a>              <span class="at">style =</span> <span class="st">"quantile"</span>,</span>
-<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a>              <span class="at">title =</span> <span class="st">"GDP per capita (with smoothing)"</span>,</span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a>              <span class="at">title =</span> <span class="st">"GDP per capita (local mean)"</span>,</span>
 <span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a>              <span class="at">palette =</span> <span class="st">"YlOrRd"</span>) <span class="sc">+</span></span>
 <span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tm_layout</span>(<span class="at">main.title =</span> <span class="st">"Hunan Province GDP per capita"</span>,</span>
 <span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a>            <span class="at">main.title.size =</span> <span class="fl">1.2</span>,</span>
@@ -418,6 +419,51 @@ Fixed bandwidth: 160.5517 AICc value: 1919.391 </code></pre>
 <div class="cell-output-display">
 <p><img src="In-class_Ex04_files/figure-html/unnamed-chunk-10-1.png" class="img-fluid" width="672"></p>
 </div>
+</div>
+</section>
+<section id="correlation-coeficient." class="level1">
+<h1>Correlation coeficient.</h1>
+<p>Is there any relationship between GDP per capita and gross industry output?</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb21"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a>bw_AIC_cor <span class="ot">&lt;-</span> <span class="fu">bw.gwr</span>(GDPPC <span class="sc">~</span> GIO,</span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>                <span class="at">data =</span> hunan_sp,</span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a>                <span class="at">approach =</span> <span class="st">"AIC"</span>,</span>
+<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a>                <span class="at">adaptive =</span> <span class="cn">TRUE</span>, <span class="co">#if this is false, then it's fixed bandwidth</span></span>
+<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a>                <span class="at">kernel =</span> <span class="st">"bisquare"</span>,</span>
+<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a>                <span class="at">longlat =</span> T)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Adaptive bandwidth (number of nearest neighbours): 62 AICc value: 1870.499 
+Adaptive bandwidth (number of nearest neighbours): 46 AICc value: 1870.902 
+Adaptive bandwidth (number of nearest neighbours): 72 AICc value: 1869.93 
+Adaptive bandwidth (number of nearest neighbours): 78 AICc value: 1869.589 
+Adaptive bandwidth (number of nearest neighbours): 82 AICc value: 1869.428 
+Adaptive bandwidth (number of nearest neighbours): 84 AICc value: 1869.688 
+Adaptive bandwidth (number of nearest neighbours): 80 AICc value: 1869.385 
+Adaptive bandwidth (number of nearest neighbours): 79 AICc value: 1869.47 
+Adaptive bandwidth (number of nearest neighbours): 80 AICc value: 1869.385 </code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb23"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a>gwstat_cor <span class="ot">&lt;-</span> <span class="fu">gwss</span>(<span class="at">data =</span> hunan_sp,</span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>               <span class="at">vars =</span> <span class="fu">c</span>(<span class="st">"GDPPC"</span>,<span class="st">"GIO"</span>),</span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>               <span class="at">bw =</span> bw_AIC_cor,</span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a>               <span class="at">kernel =</span> <span class="st">"bisquare"</span>,</span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a>               <span class="at">adaptive =</span> <span class="cn">TRUE</span>,</span>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a>               <span class="at">longlat =</span> T) </span>
+<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a>gwstat_cor_df <span class="ot">&lt;-</span> <span class="fu">as.data.frame</span>(gwstat_cor<span class="sc">$</span>SDF) <span class="sc">%&gt;%</span></span>
+<span id="cb23-10"><a href="#cb23-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(<span class="dv">12</span>,<span class="dv">13</span>)</span>
+<span id="cb23-11"><a href="#cb23-11" aria-hidden="true" tabindex="-1"></a>hunan_gstat_cor <span class="ot">&lt;-</span> <span class="fu">cbind</span>(hunan_sf, gwstat_cor_df) <span class="co">#cbind is to append row by row. Sequence matters.</span></span>
+<span id="cb23-12"><a href="#cb23-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-13"><a href="#cb23-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-14"><a href="#cb23-14" aria-hidden="true" tabindex="-1"></a><span class="co">#tm_shape(hunan_gstat_cor) +</span></span>
+<span id="cb23-15"><a href="#cb23-15" aria-hidden="true" tabindex="-1"></a><span class="co">#  tm_polygons(col = "Spearman_rho_GDPCC.GIO", </span></span>
+<span id="cb23-16"><a href="#cb23-16" aria-hidden="true" tabindex="-1"></a><span class="co">#              style = "quantile",</span></span>
+<span id="cb23-17"><a href="#cb23-17" aria-hidden="true" tabindex="-1"></a><span class="co">#              title = "Spearman Coefficient between GDPCC and GIO",</span></span>
+<span id="cb23-18"><a href="#cb23-18" aria-hidden="true" tabindex="-1"></a><span class="co">#              palette = "YlOrRd") +</span></span>
+<span id="cb23-19"><a href="#cb23-19" aria-hidden="true" tabindex="-1"></a><span class="co">#  tm_layout(main.title = "Coefficient Coefficient between GDPCC and GIO",</span></span>
+<span id="cb23-20"><a href="#cb23-20" aria-hidden="true" tabindex="-1"></a><span class="co">#            main.title.size = 1.2,</span></span>
+<span id="cb23-21"><a href="#cb23-21" aria-hidden="true" tabindex="-1"></a><span class="co">#            legend.outside = TRUE,</span></span>
+<span id="cb23-22"><a href="#cb23-22" aria-hidden="true" tabindex="-1"></a><span class="co">#            legend.outside.position = "right")</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
 
 
