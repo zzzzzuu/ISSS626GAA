@@ -1,0 +1,28 @@
+---
+title: "In-class Exercise 4"
+author: "Leow Xian Zu"
+date: "16 Sep 2024"
+date-modified: "last-modified"
+execute:
+  eval: true
+  echo: true 
+  message: false #no more warning message
+  freeze: true #whatever document already commited does not render
+---
+
+# Geographically weighted summary statistics, gwModel methods
+
+bw.gwr is the method to recommend the bandwidth to cut off, or if using adaptive distance, the optimal number of neighbours to get statistifically signifant insights as much as possible.
+
+```{r}
+pacman::p_load(sf, spdep, tmap, tidyverse, knitr, GWmodel, ggstatsplot)
+
+
+hunan_sf <- st_read(dsn = "data/geospatial", 
+                 layer = "Hunan")
+hunan2012 <- read_csv("data/aspatial/Hunan_2012.csv") #read_csv is better
+hunan_sf <- left_join(hunan_sf, hunan2012) %>%
+  dplyr::select(1:3, 7, 15, 16, 31, 32)
+
+
+```

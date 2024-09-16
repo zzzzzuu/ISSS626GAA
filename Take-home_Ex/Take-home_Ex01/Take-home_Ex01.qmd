@@ -186,7 +186,7 @@ rdacc <- read_rds("data/sandbox/rdacc.rds")
 admin <- read_rds("data/sandbox/admin.rds")
 ```
 
-# Analysis
+# Overall Analysis
 
 Roads dataset is still too dense. It is difficult to make meaningful insights out of it, so we will drop more, smaller roads.
 
@@ -311,6 +311,8 @@ While accident density generally decreases towards the outskirts, there are nota
 
 The skewed distribution of accident densities, as shown in the legend, highlights the presence of extreme hotspots amid generally moderate-to-high risk areas. This pattern underscores the need for targeted interventions in specific high-risk locations while also addressing broader regional safety concerns. We should look into them.
 
+# Deeper dive analysis
+
 ## Temporal analysis of road accidents
 
 In the following analysis, let's examine temporal patterns of road accidents in the Bangkok Metropolitan Region from 2019 to 2022. Let's visualize accident frequencies across different time scales, including hours of the day, days of the week, months, and years. This temporal breakdown will help identify high-risk periods influencing accident rates.
@@ -333,15 +335,21 @@ ggplot(rdacc_inc, aes(x = hour)) +
   geom_bar() +
   labs(title = "Accidents by Hour of Day", x = "Hour", y = "Number of Accidents")
 
+#Insight: Accidents appear to happen from 7am to 11am and 7pm.
+
 # Accidents by day of week
 ggplot(rdacc_inc, aes(x = day_of_week)) +
   geom_bar() +
   labs(title = "Accidents by Day of Week", x = "Day", y = "Number of Accidents")
 
+#Insight: Accidents appear to happen on Friday and Saturday.
+
 # Accidents by month
 ggplot(rdacc_inc, aes(x = month)) +
   geom_bar() +
   labs(title = "Accidents by Month", x = "Month", y = "Number of Accidents")
+
+#Insight: Accidents appear to happen In Dec, Jan, Apr, and Oct.
 
 # Time series of accidents by date
 rdacc_inc %>%
@@ -350,21 +358,17 @@ rdacc_inc %>%
   geom_line() +
   labs(title = "Daily Accident Counts Over Time", x = "Date", y = "Number of Accidents")
 
+#Insight: Accidents spike every year in Jan/ Dec and Apr.
+
 # Time series of accidents by year
 ggplot(rdacc_inc, aes(x = year)) +
   geom_bar() +
   labs(title = "Accidents by Year", x = "Year", y = "Number of Accidents")
+
+#Insight: Fluctuating with a graduate increase per year.
 ```
 
-It seems that accidents happen typically on the following
-
-draw table
-
-Friday Saturday
-
-7-11am, 9pm
-
-Jan, Apr, Oct, Dec
+Let's take a look at two heatmaps that examines when accidents happen.
 
 ```{r}
 library(viridis)
@@ -403,33 +407,46 @@ ggplot(accident_counts, aes(x = hour, y = month, fill = n)) +
   )
 ```
 
-It appears that Jan, Apr, Oct, Dec, but hotspots are different. Jan and Dec hotspots are in the morning peak, while Apr and Oct hotspots are in the evening peak.
+It appears that Jan, Apr, Oct, Dec, but hotspots are different. Jan and Dec hotspots are in the morning peak, while Apr and Oct hotspots are in the evening peak. This heatmap visualizes the distribution of road accidents in the Bangkok Metropolitan Region from 2019 to 2022, broken down by month and time of day.
 
-1.  
+Key observations:
+
+1.  Time patterns: The highest concentration of accidents occurs between 9am and 9pm, with peak intensity around midday and early afternoon.
+
+2.  Seasonal trends: December shows consistently high accident rates throughout the day. This could be related to increased holiday traffic or year-end celebrations.
+
+3.  Morning trends: There's a noticeable increase in accidents starting around 6am across most months, likely corresponding to morning rush hour.
+
+4.  Night-time patterns: Accident rates generally decrease late at night (12am-3am), but remain somewhat elevated compared to early morning hours (3am-6am).
+
+5.  Variability: The heatmap shows considerable variation both across months and times of day, suggesting multiple factors influence accident occurrence.
+
+6.  Hotspots: Several distinct "hotspots" of high accident frequency are visible, particularly during daytime hours in certain months like April, July, and December.
+
+This visualization provides valuable insights for targeting road safety initiatives. Focusing on high-risk times and seasons could help authorities allocate resources more effectively to reduce accident rates in the Bangkok Metropolitan Region.
 
 ```{r}
 rdacc_wday <- rdacc %>%
   mutate(
-    yday = wday(incident_datetime, label = TRUE, abbr = TRUE),
+    wday = wday(incident_datetime, label = TRUE, abbr = TRUE),
     hour = hour(incident_datetime)
   )
 
 accident_counts <- rdacc_wday %>%
-  count(yday, hour)
+  count(wday, hour)
 
-ggplot(accident_counts, aes(x = hour, y = yday, fill = n)) +
+ggplot(accident_counts, aes(x = hour, y = wday, fill = n)) +
   geom_tile() +
   scale_fill_viridis(name = "Number of Accidents", 
-                     option = "inferno", 
-                     breaks = seq(20, 80, by = 20),
-                     limits = c(20, 80)) +
+                     option = "inferno",
+                     trans = "sqrt")  +
   scale_x_continuous(breaks = seq(0, 23, by = 3), 
                      labels = c("12am", "3am", "6am", "9am", "12pm", "3pm", "6pm", "9pm")) +
-  scale_y_discrete(limits = rev(levels(accident_counts$month))) +
-  labs(title = "Heatmap of Accidents by yday and Time of Day",
+  scale_y_discrete(limits = rev(levels(accident_counts$wday))) +
+  labs(title = "Heatmap of Accidents by Day of Week and Time of Day",
        subtitle = "Bangkok Metropolitan Region, 2019-2022",
        x = "Time of Day",
-       y = "yday") +
+       y = "Day of Week") +
   theme_minimal() +
   theme(
     axis.text.x = element_text(angle = 45, hjust = 1),
@@ -440,6 +457,162 @@ ggplot(accident_counts, aes(x = hour, y = yday, fill = n)) +
     plot.subtitle = element_text(size = 12, color = "gray50"),
     axis.title = element_text(face = "bold")
   )
+
+#Insight: Hotspots are Monday and Tuesday mornings, Friday and Saturday evenings. 
+```
+
+```{r}
+tm_shape(mpsz_pop2020) +
+  tm_fill("DEPENDENCY",
+          style = "quantile",
+          palette = "Blues",
+          thres.poly = 0) + 
+  tm_facets(by="REGION_N", 
+            free.coords=TRUE, 
+            drop.shapes=TRUE) +
+  tm_layout(legend.show = FALSE,
+            title.position = c("center", "center"), 
+            title.size = 20) +
+  tm_borders(alpha = 0.5)
+```
+
+```{r}
+
+rdacc_apr <- rdacc %>%
+  filter(month(incident_datetime) == 4)
+
+lixels_apr <- lixelize_lines(roads_filtered, 
+                         700, 
+                         mindist = 500)
+samples_apr <- lines_center(lixels_apr) 
+densities_apr <- nkde(roads_filtered, 
+                  events = rdacc_apr,
+                  w = rep(1, nrow(rdacc_apr)),
+                  samples = samples_apr,
+                  kernel_name = "quartic",
+                  bw = 100, 
+                  div= "bw", 
+                  method = "simple", 
+                  digits = 1, 
+                  tol = 1,
+                  grid_shape = c(4,4), 
+                  max_depth = 8,
+                  agg = 5, 
+                  sparse = TRUE,
+                  verbose = FALSE)
+samples_apr$density <- densities_apr
+lixels_apr$density <- densities_apr
+summary(samples_apr$density)
+
+
+```
+
+```{r}
+write_rds(lixels_apr, "data/sandbox/lixels_apr.rds")
+write_rds(samples_apr, "data/sandbox/samples_apr.rds")
+```
+
+```{r}
+lixels_apr <- read_rds("data/sandbox/lixels_apr.rds")
+samples_apr <- read_rds("data/sandbox/samples_apr.rds")
+samples_apr$density <- samples_apr$density*1000
+lixels_apr$density <- lixels_apr$density*1000
+summary(samples_apr$density)
+summary(lixels_apr$density)
+```
+
+```{r}
+lixels_apr$display_name <- ifelse(is.na(lixels_apr$name_en), 
+                              paste(lixels_apr$highway,": Unnamed Road"),
+                              paste(lixels_apr$highway,": ",lixels_apr$name_en))
+
+tmap_mode('view')
+custom_breaks <- c(0, quantile(lixels_apr$density, c(0.99,
+                                                     0.992,
+                                                     0.994,
+                                                     0.996,
+                                                     0.998,
+                                                     1)))
+tm_shape(lixels_apr) +
+  tm_lines(col = "density",
+           id = "display_name",
+           breaks = custom_breaks,
+           palette = "YlOrRd",
+           lwd = 1.5)+
+  tm_shape(admin) +  
+  tm_borders(col = "black", lwd = 2, alpha = 0.5)
+
+tmap_mode('plot')
+```
+
+Accidents are spread across the entire region, but with varying densities
+
+pattern of higher-density areas seems to follow certain lines or corridors, which likely correspond to major roads or highways where traffic is heavier.
+
+```{r}
+rdacc_jandec <- rdacc %>%
+  filter(month(incident_datetime) %in% c(1, 12))
+
+lixels_jandec <- lixelize_lines(roads_filtered, 
+                         700, 
+                         mindist = 500)
+samples_jandec <- lines_center(lixels_jandec) 
+densities_jandec <- nkde(roads_filtered, 
+                  events = rdacc_jandec,
+                  w = rep(1, nrow(rdacc_jandec)),
+                  samples = samples_jandec,
+                  kernel_name = "quartic",
+                  bw = 100, 
+                  div= "bw", 
+                  method = "simple", 
+                  digits = 1, 
+                  tol = 1,
+                  grid_shape = c(4,4), 
+                  max_depth = 8,
+                  agg = 5, 
+                  sparse = TRUE,
+                  verbose = FALSE)
+samples_jandec$density <- densities_jandec
+lixels_jandec$density <- densities_jandec
+summary(samples_jandec$density)
+```
+
+```{r}
+write_rds(lixels_jandec, "data/sandbox/lixels_jandec.rds")
+write_rds(samples_jandec, "data/sandbox/samples_jandec.rds")
+```
+
+```{r}
+lixels_jandec <- read_rds("data/sandbox/lixels_jandec.rds")
+samples_jandec <- read_rds("data/sandbox/samples_jandec.rds")
+samples_jandec$density <- samples_jandec$density*1000
+lixels_jandec$density <- lixels_jandec$density*1000
+summary(samples_jandec$density)
+summary(lixels_jandec$density)
+```
+
+```{r}
+lixels_jandec$display_name <- ifelse(is.na(lixels_jandec$name_en), 
+                              paste(lixels_jandec$highway,": Unnamed Road"),
+                              paste(lixels_jandec$highway,": ",lixels_jandec$name_en))
+
+tmap_mode('view')
+custom_breaks <- c(0, quantile(lixels_jandec$density, c(0.99,
+                                                     0.992,
+                                                     0.994,
+                                                     0.996,
+                                                     0.998,
+                                                     1)))
+tm_shape(lixels_jandec) +
+  tm_lines(col = "density",
+           id = "display_name",
+           breaks = custom_breaks,
+           palette = "YlOrRd",
+           lwd = 1.5)+
+  tm_shape(admin) +  
+  tm_borders(col = "black", lwd = 2, alpha = 0.5)
+
+tmap_mode('plot')
 ```
 
 **WIP Segment below**\*
