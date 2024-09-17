@@ -138,17 +138,16 @@ gwstat_cor <- gwss(data = hunan_sp,
 
 gwstat_cor_df <- as.data.frame(gwstat_cor$SDF) %>%
   select(12,13)
-hunan_gstat_cor <- cbind(hunan_sf, gwstat_cor_df) #cbind is to append row by row. Sequence matters.
+hunan_gstat_cor <- cbind(hunan_sf, gwstat_cor_df)  #cbind is to append row by row. Sequence matters.
+names(hunan_gstat_cor)[11] <- "spearman"
 
-
-#tm_shape(hunan_gstat_cor) +
-#  tm_polygons(col = "Spearman_rho_GDPCC.GIO", 
-#              style = "quantile",
-#              title = "Spearman Coefficient between GDPCC and GIO",
-#              palette = "YlOrRd") +
-#  tm_layout(main.title = "Coefficient Coefficient between GDPCC and GIO",
-#            main.title.size = 1.2,
-#            legend.outside = TRUE,
-#            legend.outside.position = "right")
-
+tm_shape(hunan_gstat_cor) +
+  tm_polygons(col = "spearman",
+              style = "quantile",
+              title = "Spearman Coefficient between GDPCC and GIO",
+              palette = "YlOrRd") +
+  tm_layout(main.title = "Coefficient Coefficient between GDPCC and GIO",
+            main.title.size = 1.2,
+            legend.outside = TRUE,
+            legend.outside.position = "right")
 ```
