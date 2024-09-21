@@ -29,7 +29,9 @@ pacman::p_load(
   sp,           # for spatial data classes and methods
   leaflet,      # for interactive maps
   ggplot2,      # for advanced plotting
-  spNetwork     # for spatial network analysis
+  spNetwork,    # for spatial network analysis
+  sparr,        # for spatio-temporal analysis
+  KernSmooth    # for kernel smoothing
 )
 set.seed(1234)
 ```
@@ -301,17 +303,29 @@ tm_shape(lixels) +
 
 ```
 
-```{r}
-tmap_mode('plot')
-```
-
 The accident density map of Bangkok and its surrounding provinces reveals significant patterns in road safety across the region. The central area, primarily Bangkok, exhibits the highest concentration of accident hotspots, indicating a greater risk in the urban core. This concentration likely correlates with higher population density, increased traffic volume, and more complex road networks typical of major city centers.
 
 While accident density generally decreases towards the outskirts, there are notable hotspots in the peripheral areas surrounding Bangkok. These could represent key transportation corridors or rapidly developing suburban zones with high traffic flow.
 
 The skewed distribution of accident densities, as shown in the legend, highlights the presence of extreme hotspots amid generally moderate-to-high risk areas. This pattern underscores the need for targeted interventions in specific high-risk locations while also addressing broader regional safety concerns. We should look into them.
 
+The specific roads that warrant more attention are:
+
+-   Kanchanaphisek Road (both east and west portions of the long road)
+
+-   Bangkok-Chonburi Motorway
+
+-   Borommaratchachonnani Road
+
+-   Rama II Road
+
+-   Suk Sawat Road
+
+-   Industrial Ring Road
+
 # Deeper dive analysis
+
+Given the large number of road accidents in BMR, the following graphs will help me scope down to the geospatial area where accidents happen.
 
 ## Temporal analysis of road accidents
 
@@ -407,77 +421,20 @@ ggplot(accident_counts, aes(x = hour, y = month, fill = n)) +
   )
 ```
 
-It appears that Jan, Apr, Oct, Dec, but hotspots are different. Jan and Dec hotspots are in the morning peak, while Apr and Oct hotspots are in the evening peak. This heatmap visualizes the distribution of road accidents in the Bangkok Metropolitan Region from 2019 to 2022, broken down by month and time of day.
+It appears that Jan, Apr, Oct, Dec is worth investigating.
 
 Key observations:
 
-1.  Time patterns: The highest concentration of accidents occurs between 9am and 9pm, with peak intensity around midday and early afternoon.
+1.  Seasonal trends: Apr and Dec shows consistently high accident rates throughout the day. This could be related to increased holiday traffic or year-end celebrations.
 
-2.  Seasonal trends: December shows consistently high accident rates throughout the day. This could be related to increased holiday traffic or year-end celebrations.
+2.  Morning trends: There's a noticeable increase in accidents starting around 6am across most months, likely corresponding to morning rush hour.
 
-3.  Morning trends: There's a noticeable increase in accidents starting around 6am across most months, likely corresponding to morning rush hour.
+3.  Night-time patterns: Accident rates generally decrease late at night (12am-3am), but remain somewhat elevated compared to early morning hours (3am-6am).
 
-4.  Night-time patterns: Accident rates generally decrease late at night (12am-3am), but remain somewhat elevated compared to early morning hours (3am-6am).
-
-5.  Variability: The heatmap shows considerable variation both across months and times of day, suggesting multiple factors influence accident occurrence.
-
-6.  Hotspots: Several distinct "hotspots" of high accident frequency are visible, particularly during daytime hours in certain months like April, July, and December.
-
-This visualization provides valuable insights for targeting road safety initiatives. Focusing on high-risk times and seasons could help authorities allocate resources more effectively to reduce accident rates in the Bangkok Metropolitan Region.
+## Focused look at Apr
 
 ```{r}
-rdacc_wday <- rdacc %>%
-  mutate(
-    wday = wday(incident_datetime, label = TRUE, abbr = TRUE),
-    hour = hour(incident_datetime)
-  )
-
-accident_counts <- rdacc_wday %>%
-  count(wday, hour)
-
-ggplot(accident_counts, aes(x = hour, y = wday, fill = n)) +
-  geom_tile() +
-  scale_fill_viridis(name = "Number of Accidents", 
-                     option = "inferno",
-                     trans = "sqrt")  +
-  scale_x_continuous(breaks = seq(0, 23, by = 3), 
-                     labels = c("12am", "3am", "6am", "9am", "12pm", "3pm", "6pm", "9pm")) +
-  scale_y_discrete(limits = rev(levels(accident_counts$wday))) +
-  labs(title = "Heatmap of Accidents by Day of Week and Time of Day",
-       subtitle = "Bangkok Metropolitan Region, 2019-2022",
-       x = "Time of Day",
-       y = "Day of Week") +
-  theme_minimal() +
-  theme(
-    axis.text.x = element_text(angle = 45, hjust = 1),
-    panel.grid.major = element_blank(),
-    panel.grid.minor = element_blank(),
-    legend.position = "right",
-    plot.title = element_text(face = "bold", size = 14),
-    plot.subtitle = element_text(size = 12, color = "gray50"),
-    axis.title = element_text(face = "bold")
-  )
-
-#Insight: Hotspots are Monday and Tuesday mornings, Friday and Saturday evenings. 
-```
-
-```{r}
-tm_shape(mpsz_pop2020) +
-  tm_fill("DEPENDENCY",
-          style = "quantile",
-          palette = "Blues",
-          thres.poly = 0) + 
-  tm_facets(by="REGION_N", 
-            free.coords=TRUE, 
-            drop.shapes=TRUE) +
-  tm_layout(legend.show = FALSE,
-            title.position = c("center", "center"), 
-            title.size = 20) +
-  tm_borders(alpha = 0.5)
-```
-
-```{r}
-
+#| eval: False
 rdacc_apr <- rdacc %>%
   filter(month(incident_datetime) == 4)
 
@@ -508,6 +465,7 @@ summary(samples_apr$density)
 ```
 
 ```{r}
+#| eval: False
 write_rds(lixels_apr, "data/sandbox/lixels_apr.rds")
 write_rds(samples_apr, "data/sandbox/samples_apr.rds")
 ```
@@ -526,7 +484,7 @@ lixels_apr$display_name <- ifelse(is.na(lixels_apr$name_en),
                               paste(lixels_apr$highway,": Unnamed Road"),
                               paste(lixels_apr$highway,": ",lixels_apr$name_en))
 
-tmap_mode('view')
+tmap_mode('plot')
 custom_breaks <- c(0, quantile(lixels_apr$density, c(0.99,
                                                      0.992,
                                                      0.994,
@@ -545,11 +503,20 @@ tm_shape(lixels_apr) +
 tmap_mode('plot')
 ```
 
-Accidents are spread across the entire region, but with varying densities
+Accidents are spread across the entire region, but with varying densities. These highways seem to be attracting accidents:
 
-pattern of higher-density areas seems to follow certain lines or corridors, which likely correspond to major roads or highways where traffic is heavier.
+-   Kanchanaphisek Road (east portion of the long road)
+
+-   Bangkok-Chonburi Motorway
+
+-   Borommaratchachonnani Road
+
+-   Industrial Ring Road
+
+## Focused look at Jan and Dec
 
 ```{r}
+#| eval: False
 rdacc_jandec <- rdacc %>%
   filter(month(incident_datetime) %in% c(1, 12))
 
@@ -578,6 +545,7 @@ summary(samples_jandec$density)
 ```
 
 ```{r}
+#| eval: False
 write_rds(lixels_jandec, "data/sandbox/lixels_jandec.rds")
 write_rds(samples_jandec, "data/sandbox/samples_jandec.rds")
 ```
@@ -593,10 +561,10 @@ summary(lixels_jandec$density)
 
 ```{r}
 lixels_jandec$display_name <- ifelse(is.na(lixels_jandec$name_en), 
-                              paste(lixels_jandec$highway,": Unnamed Road"),
-                              paste(lixels_jandec$highway,": ",lixels_jandec$name_en))
+                                     paste(lixels_jandec$highway,": Unnamed Road"),
+                                     paste(lixels_jandec$highway,": ",lixels_jandec$name_en))
 
-tmap_mode('view')
+tmap_mode('plot')
 custom_breaks <- c(0, quantile(lixels_jandec$density, c(0.99,
                                                      0.992,
                                                      0.994,
@@ -615,69 +583,355 @@ tm_shape(lixels_jandec) +
 tmap_mode('plot')
 ```
 
-**WIP Segment below**\*
+Similar patterns observed.
+
+We should be able to merge Apr accidents with that of Jan, Oct and Dec.
 
 # Network constrained G and L function analysis
 
-In this section, we are going to perform complete spatial randomness (CSR) test by using *kfunctions()* of **spNetwork** package. The null hypothesis is defined as:
+In this section, I'm going to test if the road accidents in Bangkok are randomly spread out or if they form patterns. I'll use the *kfunctions()* from the **spNetwork** package to do this.
 
-**Ho: The observed spatial point events (i.e distribution of childcare centres) are uniformly distributed over a street network in Punggol Planning Area.**
+The idea I'm testing is: **The road accidents are evenly spread out over Bangkok's road network.**
 
-The CSR test is based on the assumption of the binomial point process which implies the hypothesis that the childcare centres are randomly and independently distributed over the street network.
+This test assumes the accidents could happen anywhere on the roads with equal chance. If the test shows this isn't true, it might mean the accidents are happening in patterns or clusters, not just randomly.
 
-If this hypothesis is rejected, we may infer that the distribution of accidents are spatially interacting and dependent on each other; as a result, they may form nonrandom patterns.
-
-```{r}
-#| eval: false
-rdacc_asspatial <- as_Spatial(rdacc)
-rdacc_sp <- as(rdacc_asspatial, "SpatialPoints")
-rdacc_ppp <- as.ppp(rdacc_sf)
-plot(rdacc_ppp)
-summary(rdacc_ppp)
-any(duplicated(rdacc_ppp))
-tmap_mode('view')
-tm_shape(rdacc) +
-  tm_dots(alpha=0.4, 
-          size=0.05)
-```
+As the road accident dataset was too large and resulted in runtime error on my machine, I needed to sample a subset of datapoints for the following analysis.
 
 ```{r}
-tmap_mode('plot')
+#| eval: False
+rdacc_focus <- rdacc %>%
+  filter(month(incident_datetime) %in% c(1,4,10,12)) %>%
+  slice_sample(n = 1000)
 ```
 
 ```{r}
 #| eval: false
-rdacc_ppp_jit <- rjitter(rdacc_ppp, 
-                             retry=TRUE, 
-                             nsim=1, 
-                             drop=TRUE)
-admin_owin <- as.owin(admin)
-plot(admin_owin)
-```
-
-```{r}
-#| eval: false
-# Apply jitter to the spatial coordinates
-rdacc_jittered <- st_jitter(rdacc, amount = 0.01)
-
 kfun_rdacc <- kfunctions(roads_filtered, 
-                             rdacc_jittered,
-                             start = 0, 
-                             end = 300, 
-                             step = 100, 
-                             width = 50, 
-                             nsim = 30, 
-                             resolution = 50,
-                             verbose = FALSE, 
-                             conf_int = 0.05,
-                         agg= 400)
+                         rdacc_focus,
+                         start = 0, 
+                         end = 1000, 
+                         step = 50, 
+                         width = 50, 
+                         nsim = 50, 
+                         resolution = 50,
+                         verbose = FALSE, 
+                         conf_int = 0.05)
+write_rds(kfun_rdacc, "data/sandbox/kfun_rdacc.rds")
+
 ```
 
 ```{r}
-#| eval: false
+kfun_rdacc <- read_rds("data/sandbox/kfun_rdacc.rds")
 kfun_rdacc$plotk
 ```
 
-## Creating date and time analysis
+Insights from the K Function:
 
-WIP
+-   Road accidents BMR in Jan, Apr, Oct and Dec (holiday months) are not randomly distributed along the road network.
+
+-   There are significant hotspots or areas of concentration for accidents.
+
+-   This clustering exists at various scales, from local (short distances) to broader areas (longer distances).
+
+-   The pattern suggests there might be specific factors (e.g., dangerous road segments, intersections, or broader area characteristics) contributing to higher accident rates in certain locations.
+
+This provides a strong basis for further investigation into the factors causing these accident clusters and could be valuable for targeted road safety interventions.
+
+# **Spatio-Temporal Point Patterns Analysis**
+
+First let's create the owin file which will be used later.
+
+```{r}
+admin_owin <- as.owin(admin)
+admin_owin
+```
+
+Next, create the dataset to do spatio-temporal analysis. The plot shows how it generally looks like. Everything appears to be in order that road accidents happen on the road network, but it does not tell where it is concentrated in, and when it happens.
+
+```{r}
+roads <- read_rds("data/sandbox/roads.rds")
+rdacc <- read_rds("data/sandbox/rdacc.rds")
+admin <- read_rds("data/sandbox/admin.rds")
+
+rdacc_spatiotemporal <- rdacc %>% 
+  mutate(DayofYear = yday(incident_datetime)) %>%
+  mutate(Month_num = month(incident_datetime)) %>%
+  mutate(Month_fac = month(incident_datetime, 
+                           label = TRUE, 
+                           abbr = FALSE))
+
+tm_shape(admin) +
+  tm_borders() +    
+  tm_shape(rdacc_spatiotemporal) +
+  tm_dots()         
+```
+
+## Temporal analysis
+
+Let's try a simple month breakdown first to see the seasonal changes across months. The December months appear more sparse, but that is roughly all I can tell from visual inspection.
+
+```{r}
+tm_shape(admin)+
+  tm_polygons() +
+tm_shape(rdacc_spatiotemporal) +
+  tm_dots(size = 0.1) +
+tm_facets(by="Month_fac", 
+            free.coords=FALSE, 
+            drop.units = TRUE)
+```
+
+I'll try to calculate a non-network constrained KDE to examine the hotspots. Simply put, it smooths the road accidents over the owin space. I will need to use ppp for this.
+
+```{r}
+rdacc_spatiotemporal_month <- rdacc_spatiotemporal %>% 
+  dplyr::select(Month_num)
+rdacc_spatiotemporal_month_ppp <- as.ppp(rdacc_spatiotemporal_month)
+rdacc_spatiotemporal_month_ppp
+any(duplicated(rdacc_spatiotemporal_month_ppp))
+rdacc_spatiotemporal_month_ppp_jit <- rjitter(rdacc_spatiotemporal_month_ppp, 
+                                              retry=TRUE, 
+                                              nsim=1, 
+                                              drop=TRUE)
+any(duplicated(rdacc_spatiotemporal_month_ppp_jit))
+```
+
+This next segment plots the points within the owin.
+
+```{r}
+rdacc_month_owin <- rdacc_spatiotemporal_month_ppp_jit[admin_owin]
+summary(rdacc_month_owin)
+plot(rdacc_month_owin)
+
+```
+
+This next segment calculates the KDE within the owin.
+
+```{r}
+st_kde <- spattemp.density(rdacc_month_owin)
+summary(st_kde)
+
+```
+
+Let's plot the months out to see how it shifts.
+
+```{r}
+tims <- c(1:12)
+par(mfcol=c(2,3))
+for(i in tims){ 
+  plot(st_kde, i, 
+       override.par=FALSE, 
+       fix.range=TRUE, 
+       main=paste("KDE at month",i))
+}
+
+```
+
+Make it a gif.
+
+```{r}
+#| eval: false
+create_and_save_plot <- function(i) {
+  png(filename = paste0("kde_plot_month_", i, ".png"), 
+      width = 800, height = 600)  # Adjust width and height as needed
+  plot(st_kde, i, 
+       override.par = FALSE, 
+       fix.range = TRUE, 
+       main = paste("KDE at month", i))
+  dev.off()
+}
+
+# Create and save each plot separately
+for(i in tims) {
+  create_and_save_plot(i)
+}
+```
+
+I examine the change using the following gif. It does look like there is a slight increase in road accidents in Apr, but the larger increase is in December and January. However, this is not constrained to a network, so it still does not show which road the accidents are on. So this analysis is insufficient.
+
+![](spatiotemporal.gif)
+
+Let's try network constraining the KDE. First, I'll format the time so that it is counting days.
+
+```{r}
+# converting the Date field to a numeric field (counting months)
+rdacc_spatiotemporal <- rdacc
+rdacc_spatiotemporal$Time <- as.POSIXct(rdacc_spatiotemporal$incident_datetime, format = "%Y/%m/%d")
+start <- as.POSIXct("2019/01/01", format = "%Y/%m/%d")
+end <- as.POSIXct("2022/12/31", format = "%Y/%m/%d")
+rdacc_spatiotemporal$Time <- difftime(rdacc_spatiotemporal$Time, start, units = "days")
+rdacc_spatiotemporal$Time <- as.numeric(rdacc_spatiotemporal$Time)
+
+months <- as.character(1:12)
+months <- ifelse(nchar(months)==1, paste0("0", months), months)
+months_starts_labs <- paste("2019/",months,"/01", sep = "")
+months_starts_num <- as.POSIXct(months_starts_labs, format = "%Y/%m/%d")
+months_starts_num <- difftime(months_starts_num, start, units = "days")
+months_starts_num <- as.numeric(months_starts_num)
+months_starts_labs <- gsub("2019/", "", months_starts_labs, fixed = TRUE)
+
+# Create breaks for each year
+years <- seq(start, end, by = "year")
+year_breaks <- as.numeric(difftime(years, start, units = "days"))
+
+# Create labels for each year
+year_labels <- format(years, "%Y")
+
+ggplot(rdacc_spatiotemporal) + 
+  geom_histogram(aes(x = Time), bins = 48, color = "white") +  # 48 bins for monthly-like divisions
+  scale_x_continuous(breaks = year_breaks, 
+                     labels = year_labels,
+                     limits = c(0, max(rdacc_spatiotemporal$Time))) +
+  labs(x = "Year", y = "Frequency", title = "Distribution of Incidents Over Time") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+
+
+```
+
+I shall smooth out the number of incidents across days.
+
+```{r}
+w <- rep(1,nrow(rdacc_spatiotemporal))
+samples <- seq(0, max(rdacc_spatiotemporal$Time), 0.5)
+
+bw1 <- bw.bcv(rdacc_spatiotemporal$Time, nb = 1000, lower = 1, upper = 80)
+bw2 <- bw.ucv(rdacc_spatiotemporal$Time, nb = 1000, lower = 1, upper = 80)
+bw3 <- bw.SJ(rdacc_spatiotemporal$Time, nb = 1000, lower = 1, upper = 80)
+
+
+time_kernel_values <- data.frame(
+  bw_bcv = tkde(rdacc_spatiotemporal$Time, w = w, samples = samples, bw = bw1, kernel_name = "quartic"),
+  bw_ucv = tkde(rdacc_spatiotemporal$Time, w = w, samples = samples, bw = bw2, kernel_name = "quartic"),
+  bw_SJ = tkde(rdacc_spatiotemporal$Time, w = w, samples = samples, bw = bw3, kernel_name = "quartic"),
+  time = samples
+)
+
+df_time <- reshape2::melt(time_kernel_values,id.vars = "time")
+df_time$variable <- as.factor(df_time$variable)
+
+ggplot(data = df_time) + 
+  geom_line(aes(x = time, y = value)) +
+  scale_x_continuous(breaks = year_breaks, 
+                     labels = year_labels,
+                     limits = c(0, max(rdacc_spatiotemporal$Time))) +
+  facet_wrap(vars(variable), ncol=2, scales = "free")  + 
+  theme(axis.text = element_text(size = 5))
+```
+
+By comparing bandwidth selection methods, there are insights into the temporal patterns of road accidents . The BCV and SJ methods particularly highlight meaningful patterns compared to UCV method as it is too noisy and may lead to misinterpretation.
+
+## Spatio-temporal analysis with network constraint
+
+Next we do spatio-temporal analysis. We start by examining the bandwidths that are required to have a useful smoothing.
+
+```{r}
+#| eval: false
+cv_scores <- bw_tnkde_cv_likelihood_calc(
+  bws_net = seq(1000,10000,2000),
+  bws_time = seq(1,1460,200),
+  lines = roads_filtered,
+  events = rdacc_spatiotemporal,
+  time_field = "incident_datetime",
+  w = rep(1, nrow(rdacc_spatiotemporal)),
+  kernel_name = "quartic",
+  method = "discontinuous",
+  diggle_correction = FALSE,
+  study_area = NULL,
+  max_depth = 10,
+  digits = 2,
+  tol = 0.1,
+  agg = 10,
+  sparse=TRUE,
+  grid_shape=c(20,20),
+  sub_sample=1,
+  verbose = FALSE,
+  check = TRUE)
+write_rds(cv_scores, "data/sandbox/cv_scores.rds")
+```
+
+```{r}
+cv_scores <- read_rds("data/sandbox/cv_scores.rds")
+knitr::kable(cv_scores)
+```
+
+The tables show that information does not really. So I shall pick a logical bandwidth to work with - 1km and 60 days.
+
+But because the KDE calculation is producing errors due to large dataset, I chose to filter the road system again.
+
+```{r}
+unique(roads$highway)
+roads_filtered_again <- roads %>%
+  filter(!is.na(highway) & 
+           (highway %in% c("secondary",
+                           "primary",
+                           "trunk",
+                           "motorway")))
+plot(st_geometry(roads_filtered_again))
+```
+
+Above seems ok to use. To make the calculation possible, I also use a sample for the network and accidents.
+
+```{r}
+#| eval: False
+# choosing sample in times (every 50 days)
+sample_time <- seq(0, max(as.numeric(rdacc_spatiotemporal$Time)), 50)
+rdacc_spatiotemporal_sample <- rdacc_spatiotemporal %>%
+  slice_sample(n = 5000)
+roads_filtered_again_sample <- roads_filtered_again %>%
+  slice_sample(n = 5000)
+
+# calculating densities
+tnkde_densities <- tnkde(lines = roads_filtered_again_sample,
+                         events = rdacc_spatiotemporal_sample,
+                         time_field = "Time",
+                         w = rep(1, nrow(rdacc_spatiotemporal_sample)), 
+                         samples_loc = samples,
+                         samples_time = sample_time, 
+                         kernel_name = "quartic",
+                         bw_net = 1000, bw_time = 60,
+                         adaptive = TRUE,
+                         trim_bw_net = 900,
+                         trim_bw_time = 80,
+                         method = "continuous",
+                         div = "bw", max_depth = 10,
+                         digits = 2, tol = 0.01,
+                         agg = 15, grid_shape = c(1,1), 
+                         verbose  = FALSE)
+
+write_rds(tnkde_densities, "data/sandbox/tnkde_densities.rds")
+
+```
+
+```{r}
+#| eval: False
+tnkde_densities <- read_rds("data/sandbox/tnkde_densities.rds")
+
+# creating a color palette for all the densities
+library(classInt)
+library(viridis)
+all_densities <- c(tnkde_densities$k)
+color_breaks <- classIntervals(all_densities, n = 10, style = "kmeans")
+
+# generating a map at each sample time
+all_maps <- lapply(1:ncol(tnkde_densities$k), function(i){
+  time <- sample_time[[i]]
+  date <- as.Date(start) + time
+  
+  samples$density <- tnkde_densities$k[,i]
+  map1 <- tm_shape(samples) + 
+  tm_dots(col = "density", size = 0.01,
+          breaks = color_breaks$brks, palette = viridis(10)) + 
+    tm_layout(legend.show=FALSE, main.title = as.character(date), main.title.size = 0.5)
+  return(map1)
+})
+
+# creating a gif with all the maps
+tmap_animation(all_maps, filename = "animated_map.gif", 
+               width = 1000, height = 1000, dpi = 300, delay = 50)
+```
+
+![Spatiotemporalgif](animated_map.gif)
+
+The spatio-temporal map shows that Kanchanaphisek Road, Borommaratchachonnani Road and Industrial Ring Road are serious hotspots for road accidents.
