@@ -1,0 +1,235 @@
+---
+title: "In-class Exercise 5"
+author: "Leow Xian Zu"
+date: "23 Sep 2024"
+date-modified: "last-modified"
+execute:
+  eval: true
+  echo: true 
+  message: false #no more warning message
+  freeze: true #whatever document already commited does not render
+---
+
+```{r}
+
+pacman::p_load(sf, sfdep, tmap, tidyverse)
+
+hunan <- st_read(dsn = "C:/zzzzzuu/ISSS626GAA/Hands-on_Ex/Hands-on_Ex04/data/geospatial", 
+                 layer = "Hunan")
+hunan2012 <- read_csv("C:/zzzzzuu/ISSS626GAA/Hands-on_Ex/Hands-on_Ex04/data/aspatial/Hunan_2012.csv")
+
+hunan_GDPPC <- left_join(hunan,hunan2012) %>%
+  dplyr::select(1:4, 7, 15)
+
+
+```
+
+```{r}
+tmap_mode("plot")
+tm_shape(hunan_GDPPC) +
+  tm_fill("GDPPC",
+          n = 5,
+          style = "jenks") +
+  tm_borders(alpha = 0.5)
+```
+
+```{r}
+wm_q <- hunan_GDPPC %>%
+  mutate(nb = st_contiguity(geometry), # This is different because we are using sfdep
+         wt = st_weights(nb,
+                         style = "W"), #W is row standardised weights. "B" "C" "U" "minmax" and "S" are also options. C is global standard, U is equal to C divided by neigbouts, S is variance stabilizing coding scheme. allow_zero: if true it assigns zero as lagged value to zone without neighbours.
+         .before = 1) #This means this tool makes new fields insert to the front.
+```
+
+Two more fields added in, nb and wt. nb gives neighbour list. wt gives weights across rows.
+
+This is handier than the spdep coz spdep needs to check one by one.
+
+```{r}
+moranI <- global_moran(wm_q$GDPPC,
+                       wm_q$nb,
+                       wm_q$wt)
+glimpse(moranI)
+```
+
+This is only a calculation step. there's no p-value. No monte carlo. We will use test instead.
+
+```{r}
+global_moran_test(wm_q$GDPPC,
+                  wm_q$nb,
+                  wm_q$wt)
+```
+
+p-value smaller than alpha. We have enough statistical evidence to reject the null hypothesis that the pattern is random. Look at the sign, the statistic is 0.3 . Low, but got signs of positive autocorrelation. Means there is some clustering.
+
+```{r}
+set.seed(1234)
+global_moran_perm(wm_q$GDPPC,
+                  wm_q$nb,
+                  wm_q$wt,
+                  nsim=99)
+```
+
+p-value even smaller. Because of more iterations. Each have a result. Large number theory.
+
+I have 88 polygons, when I run the permutations, it is faster than point pattern.
+
+Netx, local moran's
+
+```{r}
+lisa <- wm_q %>%
+  mutate(local_moran = local_moran(
+    GDPPC, nb, wt, nsim = 99),
+    .before = 1) %>%
+  unnest(local_moran) #Instead of a list, it puts into a table.
+
+```
+
+1.  ii: Local Moran's I statistic
+
+    -   Indicates the strength and type of spatial autocorrelation for each location
+
+    -   Positive values suggest similarity with neighbors, negative values suggest dissimilarity
+
+2.  e.ii: Expected value of ii under the null hypothesis of no spatial autocorrelation
+
+    -   Used as a reference point to compare against the observed Ii
+
+3.  var_ii: Variance of ii
+
+    -   Measures the variability of the Local Moran's I statistic
+
+    -   Used in calculating significance
+
+4.  z.ii: Z-score of ii
+
+    -   Standardized score indicating how many standard deviations Ii is from its expected value
+
+    -   Used to assess statistical significance
+
+5.  p_ii: p-value for ii
+
+    -   Probability of obtaining the observed Ii value under the null hypothesis
+
+    -   Used to determine statistical significance (typically compared to a threshold like 0.05)
+
+6.  p_ii_sim and p_folded_sim: Simulated p-values
+
+    -   Alternative measures of significance based on Monte Carlo simulations
+
+    -   Useful for more robust significance testing, especially with non-normal data
+
+7.  Skewness and Kurtosis:
+
+    -   Describe the shape of the distribution of simulated values
+
+    -   Help assess the validity of assumptions in your analysis
+
+8.  Cluster_type:
+
+    -   Categorizes each location based on its relationship with neighbors
+
+    -   Typically includes categories like "High-High", "Low-Low", "High-Low", "Low-High"
+
+9.  Median and Pysal:
+
+    -   These appear to be factor variables, possibly indicating alternative classification methods
+
+    -   Can be used to compare different ways of categorizing spatial relationships
+
+What you can do with these results:
+
+1.  Identify significant clusters or outliers using the p-values and cluster types
+
+2.  Map the results to visualize spatial patterns
+
+3.  Investigate locations with particularly high or low ii values
+
+4.  Compare observed patterns with what you'd expect theoretically (using e.ii)
+
+5.  Use the cluster types to inform further analyses or policy decisions
+
+6.  Assess the robustness of your results by comparing different significance measures (p_ii vs p_ii_sim)
+
+7.  Check for potential issues in your data or analysis using the skewness and kurtosis values
+
+```{r}
+tmap_mode("plot")
+map1 <- tm_shape(lisa) + 
+  tm_fill("ii")+
+  tm_borders(alpha=0.5)+
+  tm_layout(main.title="p-value",
+            main.title.size=2)
+```
+
+```{r}
+tmap_mode("plot")
+map2 <- tm_shape(lisa) + 
+  tm_fill("p_ii_sim")+
+  tm_borders(alpha=0.5)+
+  tm_layout(main.title="p-value",
+            main.title.size=2)
+```
+
+```{r}
+tmap_arrange(map1, 
+             map2, 
+             asp=1, #Aspect Ratio
+             ncol=2)
+```
+
+```{r}
+lisa_sig <- lisa %>%
+  filter(p_ii < 0.05)
+
+tm_shape(lisa) +
+  tm_polygons()+
+  tm_shape(lisa_sig)+
+  tm_fill("mean")+
+  tm_borders(alpha=0.5)+
+  tm_layout(main.title="Mean",
+            main.title.size=2)
+```
+
+Red ones mean high surrounded by high.
+
+purple are outliers, low surrounded by high.
+
+green is not an outlier, but a cluster which is a low low cluster. That is where it is tricky. It's the only one because the others got filtered away.
+
+```{r}
+wm_idw <- hunan_GDPPC %>%
+  mutate(nb = include_self(st_contiguity(geometry)),
+         wts = st_inverse_distance(nb, geometry, 
+                                   scale = 1,
+                                   alpha = 1),
+         .before = 1)
+```
+
+```{r}
+HCSA <- wm_idw %>%
+  mutate(local_Gi = local_gstar_perm(
+    GDPPC, nb, wts, nsim=99),
+    .before = 1) %>%
+  unnest(local_Gi)
+HCSA
+```
+
+```{r}
+tmap_mode("plot")
+HCSA_sig <- HCSA %>%
+  filter(p_sim < 0.05)
+map4 <- tm_shape(HCSA) + 
+  tm_polygons()+
+  tm_shape(HCSA_sig)+
+  tm_fill("cluster")+
+  tm_borders(alpha=0.5)+
+  tm_layout(main.title="hot and cold spot",
+            main.title.size=2)
+map5 <- tm_shape(HCSA) + 
+  tm_fill("p_sim")+
+  tm_borders(alpha=0.5)+
+  tm_layout(main.title="p-value",
+            main.title.size=2)
+tmap_arrange(map4, map5,ncol = 2)
+```

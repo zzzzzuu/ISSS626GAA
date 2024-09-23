@@ -12,6 +12,8 @@ execute:
 
 # Global measures of spatial autocorrelation
 
+Is it randomly distributed?
+
 Let's learn how to compute the GMSA from spdep.
 
 # Setup
