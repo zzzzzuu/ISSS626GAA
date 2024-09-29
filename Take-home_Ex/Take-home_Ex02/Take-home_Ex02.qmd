@@ -1,0 +1,27 @@
+---
+title: "Take-home Exercise 2"
+author: "Leow Xian Zu"
+date: "23 Sep 2024"
+date-modified: "last-modified"
+execute:
+  eval: true
+  echo: true 
+  message: false #no more warning message
+  freeze: true #whatever document already commited does not render
+---
+
+tourism revenue no tevenly distributed. there are variations.
+
+our interest is where they are located. spatial dsitribution.
+
+look into where are the hotspots, spatial autocorrelation, where are the clusters, outliers,
+
+we want to see the tynamic of it. we want to know which one changed most significantly over time and how we classified them.
+
+we are looking at key indicators of tourism economy. it's NOT 1 only. there are more than 1 indicators.
+
+like , total revenue, is 1 indicator. see if there are any others.
+
+if tourism economy is dependent on space and time, we wanna find cluster, outlier, hotspot and coldspot.
+
+data, province level, incl. bangkok. we used it before. we only need the province level. just one.
