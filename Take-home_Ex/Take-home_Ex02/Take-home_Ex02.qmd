@@ -25,3 +25,76 @@ like , total revenue, is 1 indicator. see if there are any others.
 if tourism economy is dependent on space and time, we wanna find cluster, outlier, hotspot and coldspot.
 
 data, province level, incl. bangkok. we used it before. we only need the province level. just one.
+
+attribute in thin and long several years and attribute. reorganise table for analysis.
+
+Geosptial data is high resolution. many small islands. we need to be careful about centroids don't end up in water.
+
+revenue covers precovid during covid and post covid. inherent patterns. pre-covid has change already. We are more interested in space time changes.
+
+Spatial, unequal also. bangkok highest. How these spatial changes over time.
+
+key indicator(S). look at multiple and different measures to allow us to better understand tourism economy.
+
+Thailand administrative level 0 (country), 1 (province), 2 (district), 3 (sub-district, tambon) gazetteer. Need to include bangkok but bangkok is a city
+
+Need to change the month into integers to do spacetime cube.
+
+```{r}
+# Load required libraries
+library(sf)
+library(ggplot2)
+
+# Import the shapefile
+thailand <- st_read("data/tha_admbnda_adm1_rtsd_20220121.shp")
+
+# Plot the map
+ggplot() +
+  geom_sf(data = thailand) +
+  theme_minimal() +
+  labs(title = "Thailand Administrative Boundaries (Province Level)")
+```
+
+```{r}
+thailand_utm <- st_transform(thailand, crs = 32647)
+thailand_utm
+```
+
+```{r}
+# Load required libraries
+library(readr)
+library(dplyr)
+library(tidyr)
+
+# Import the CSV file
+tourism_data <- read_csv("data/thailand_domestic_tourism_2019_2023_ver2.csv")
+
+# Display the first few rows and structure of the data
+print(head(tourism_data))
+glimpse(tourism_data)
+
+# Check for any missing values
+sum(is.na(tourism_data))
+
+# Clean and prepare the data
+tourism_data_clean <- tourism_data %>%
+  # Remove any rows with missing values
+  na.omit() %>%
+  # Ensure province names match those in the shapefile (you may need to adjust this)
+  mutate(province_eng = toupper(province_eng))
+
+# Display the first few rows of the cleaned data
+print(head(tourism_data_clean))
+
+
+# pivot the data to have variables as columns
+tourism_wide <- tourism_data_clean %>%
+  pivot_wider(
+    id_cols = c(province_eng, date),
+    names_from = variable,
+    values_from = value
+  )
+
+# Display the wide format data
+print(head(tourism_wide))
+```

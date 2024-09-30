@@ -22,6 +22,40 @@ ul.task-list li input[type="checkbox"] {
   margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
   vertical-align: middle;
 }
+/* CSS for syntax highlighting */
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
 </style>
 
 
@@ -240,7 +274,7 @@ ul.task-list li input[type="checkbox"] {
     <div>
     <div class="quarto-title-meta-heading">Modified</div>
     <div class="quarto-title-meta-contents">
-      <p class="date-modified">September 23, 2024</p>
+      <p class="date-modified">September 30, 2024</p>
     </div>
   </div>
     
@@ -257,6 +291,209 @@ ul.task-list li input[type="checkbox"] {
 <p>like , total revenue, is 1 indicator. see if there are any others.</p>
 <p>if tourism economy is dependent on space and time, we wanna find cluster, outlier, hotspot and coldspot.</p>
 <p>data, province level, incl.&nbsp;bangkok. we used it before. we only need the province level. just one.</p>
+<p>attribute in thin and long several years and attribute. reorganise table for analysis.</p>
+<p>Geosptial data is high resolution. many small islands. we need to be careful about centroids don’t end up in water.</p>
+<p>revenue covers precovid during covid and post covid. inherent patterns. pre-covid has change already. We are more interested in space time changes.</p>
+<p>Spatial, unequal also. bangkok highest. How these spatial changes over time.</p>
+<p>key indicator(S). look at multiple and different measures to allow us to better understand tourism economy.</p>
+<p>Thailand administrative level 0 (country), 1 (province), 2 (district), 3 (sub-district, tambon) gazetteer. Need to include bangkok but bangkok is a city</p>
+<p>Need to change the month into integers to do spacetime cube.</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Load required libraries</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(sf)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Warning: package 'sf' was built under R version 4.3.3</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Linking to GEOS 3.11.2, GDAL 3.8.2, PROJ 9.3.1; sf_use_s2() is TRUE</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(ggplot2)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Warning: package 'ggplot2' was built under R version 4.3.3</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Import the shapefile</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>thailand <span class="ot">&lt;-</span> <span class="fu">st_read</span>(<span class="st">"data/tha_admbnda_adm1_rtsd_20220121.shp"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Reading layer `tha_admbnda_adm1_rtsd_20220121' from data source 
+  `C:\zzzzzuu\ISSS626GAA\Take-home_Ex\Take-home_Ex02\data\tha_admbnda_adm1_rtsd_20220121.shp' 
+  using driver `ESRI Shapefile'
+Simple feature collection with 77 features and 16 fields
+Geometry type: MULTIPOLYGON
+Dimension:     XY
+Bounding box:  xmin: 97.34336 ymin: 5.613038 xmax: 105.637 ymax: 20.46507
+Geodetic CRS:  WGS 84</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Plot the map</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>() <span class="sc">+</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_sf</span>(<span class="at">data =</span> thailand) <span class="sc">+</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>() <span class="sc">+</span></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Thailand Administrative Boundaries (Province Level)"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="Take-home_Ex02_files/figure-html/unnamed-chunk-1-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>thailand_utm <span class="ot">&lt;-</span> <span class="fu">st_transform</span>(thailand, <span class="at">crs =</span> <span class="dv">32647</span>)</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>thailand_utm</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Simple feature collection with 77 features and 16 fields
+Geometry type: MULTIPOLYGON
+Dimension:     XY
+Bounding box:  xmin: 325178.8 ymin: 620860.6 xmax: 1213656 ymax: 2263241
+Projected CRS: WGS 84 / UTM zone 47N
+First 10 features:
+   Shape_Leng Shape_Area                  ADM1_EN       ADM1_TH ADM1_PCODE
+1    2.417227 0.13133873                  Bangkok  กรุงเทพมหานคร       TH10
+2    1.695100 0.07926199             Samut Prakan    สมุทรปราการ       TH11
+3    1.251111 0.05323766               Nonthaburi         นนทบุรี       TH12
+4    1.884945 0.12698345             Pathum Thani        ปทุมธานี       TH13
+5    3.041716 0.21393797 Phra Nakhon Si Ayutthaya พระนครศรีอยุธยา       TH14
+6    1.739908 0.07920961                Ang Thong        อ่างทอง       TH15
+7    5.693342 0.54578838                 Lop Buri          ลพบุรี       TH16
+8    1.778326 0.06872655                Sing Buri         สิงห์บุรี       TH17
+9    2.896316 0.20907828                 Chai Nat         ชัยนาท       TH18
+10   4.766446 0.29208711                 Saraburi         สระบุรี       TH19
+   ADM1_REF ADM1ALT1EN ADM1ALT2EN ADM1ALT1TH ADM1ALT2TH  ADM0_EN   ADM0_TH
+1      &lt;NA&gt;       &lt;NA&gt;       &lt;NA&gt;       &lt;NA&gt;       &lt;NA&gt; Thailand ประเทศไทย
+2      &lt;NA&gt;       &lt;NA&gt;       &lt;NA&gt;       &lt;NA&gt;       &lt;NA&gt; Thailand ประเทศไทย
+3      &lt;NA&gt;       &lt;NA&gt;       &lt;NA&gt;       &lt;NA&gt;       &lt;NA&gt; Thailand ประเทศไทย
+4      &lt;NA&gt;       &lt;NA&gt;       &lt;NA&gt;       &lt;NA&gt;       &lt;NA&gt; Thailand ประเทศไทย
+5      &lt;NA&gt;       &lt;NA&gt;       &lt;NA&gt;       &lt;NA&gt;       &lt;NA&gt; Thailand ประเทศไทย
+6      &lt;NA&gt;       &lt;NA&gt;       &lt;NA&gt;       &lt;NA&gt;       &lt;NA&gt; Thailand ประเทศไทย
+7      &lt;NA&gt;       &lt;NA&gt;       &lt;NA&gt;       &lt;NA&gt;       &lt;NA&gt; Thailand ประเทศไทย
+8      &lt;NA&gt;       &lt;NA&gt;       &lt;NA&gt;       &lt;NA&gt;       &lt;NA&gt; Thailand ประเทศไทย
+9      &lt;NA&gt;       &lt;NA&gt;       &lt;NA&gt;       &lt;NA&gt;       &lt;NA&gt; Thailand ประเทศไทย
+10     &lt;NA&gt;       &lt;NA&gt;       &lt;NA&gt;       &lt;NA&gt;       &lt;NA&gt; Thailand ประเทศไทย
+   ADM0_PCODE       date    validOn    validTo                       geometry
+1          TH 2019-02-18 2022-01-22 -001-11-30 MULTIPOLYGON (((674339.8 15...
+2          TH 2019-02-18 2022-01-22 -001-11-30 MULTIPOLYGON (((687139.8 15...
+3          TH 2019-02-18 2022-01-22 -001-11-30 MULTIPOLYGON (((644817.9 15...
+4          TH 2019-02-18 2022-01-22 -001-11-30 MULTIPOLYGON (((704086 1575...
+5          TH 2019-02-18 2022-01-22 -001-11-30 MULTIPOLYGON (((662941.6 16...
+6          TH 2019-02-18 2022-01-22 -001-11-30 MULTIPOLYGON (((643472.8 16...
+7          TH 2019-02-18 2022-01-22 -001-11-30 MULTIPOLYGON (((751293.3 17...
+8          TH 2019-02-18 2022-01-22 -001-11-30 MULTIPOLYGON (((647136.1 16...
+9          TH 2019-02-18 2022-01-22 -001-11-30 MULTIPOLYGON (((620165.4 17...
+10         TH 2019-02-18 2022-01-22 -001-11-30 MULTIPOLYGON (((757935.1 16...</code></pre>
+</div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Load required libraries</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(readr)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Warning: package 'readr' was built under R version 4.3.3</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Warning: package 'dplyr' was built under R version 4.3.3</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>
+Attaching package: 'dplyr'</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>The following objects are masked from 'package:stats':
+
+    filter, lag</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>The following objects are masked from 'package:base':
+
+    intersect, setdiff, setequal, union</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb18"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyr)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Warning: package 'tidyr' was built under R version 4.3.3</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb20"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Import the CSV file</span></span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>tourism_data <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"data/thailand_domestic_tourism_2019_2023_ver2.csv"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Rows: 30800 Columns: 7</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>── Column specification ────────────────────────────────────────────────────────
+Delimiter: ","
+chr  (5): province_thai, province_eng, region_thai, region_eng, variable
+dbl  (1): value
+date (1): date
+
+ℹ Use `spec()` to retrieve the full column specification for this data.
+ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb23"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Display the first few rows and structure of the data</span></span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(<span class="fu">head</span>(tourism_data))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 6 × 7
+  date       province_thai province_eng    region_thai region_eng variable value
+  &lt;date&gt;     &lt;chr&gt;         &lt;chr&gt;           &lt;chr&gt;       &lt;chr&gt;      &lt;chr&gt;    &lt;dbl&gt;
+1 2019-01-01 กรุงเทพมหานคร  Bangkok         ภาคกลาง     central    ratio_t…  93.4
+2 2019-01-01 ลพบุรี          Lopburi         ภาคกลาง     central    ratio_t…  61.3
+3 2019-01-01 พระนครศรีอยุธยา Phra Nakhon Si… ภาคกลาง     central    ratio_t…  73.4
+4 2019-01-01 สระบุรี         Saraburi        ภาคกลาง     central    ratio_t…  67.3
+5 2019-01-01 ชัยนาท         Chainat         ภาคกลาง     central    ratio_t…  79.3
+6 2019-01-01 นครปฐม        Nakhon Pathom   ภาคกลาง     central    ratio_t…  71.7</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb25"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="fu">glimpse</span>(tourism_data)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Rows: 30,800
+Columns: 7
+$ date          &lt;date&gt; 2019-01-01, 2019-01-01, 2019-01-01, 2019-01-01, 2019-01…
+$ province_thai &lt;chr&gt; "กรุงเทพมหานคร", "ลพบุรี", "พระนครศรีอยุธยา", "สระบุรี", "ชัยนาท…
+$ province_eng  &lt;chr&gt; "Bangkok", "Lopburi", "Phra Nakhon Si Ayutthaya", "Sarab…
+$ region_thai   &lt;chr&gt; "ภาคกลาง", "ภาคกลาง", "ภาคกลาง", "ภาคกลาง", "ภาคกลาง", "…
+$ region_eng    &lt;chr&gt; "central", "central", "central", "central", "central", "…
+$ variable      &lt;chr&gt; "ratio_tourist_stay", "ratio_tourist_stay", "ratio_touri…
+$ value         &lt;dbl&gt; 93.37, 61.32, 73.37, 67.33, 79.31, 71.70, 64.65, 71.21, …</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb27"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Check for any missing values</span></span>
+<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a><span class="fu">sum</span>(<span class="fu">is.na</span>(tourism_data))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] 0</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb29"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Clean and prepare the data</span></span>
+<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a>tourism_data_clean <span class="ot">&lt;-</span> tourism_data <span class="sc">%&gt;%</span></span>
+<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Remove any rows with missing values</span></span>
+<span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">na.omit</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb29-5"><a href="#cb29-5" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Ensure province names match those in the shapefile (you may need to adjust this)</span></span>
+<span id="cb29-6"><a href="#cb29-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">province_eng =</span> <span class="fu">toupper</span>(province_eng))</span>
+<span id="cb29-7"><a href="#cb29-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-8"><a href="#cb29-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Display the first few rows of the cleaned data</span></span>
+<span id="cb29-9"><a href="#cb29-9" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(<span class="fu">head</span>(tourism_data_clean))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 6 × 7
+  date       province_thai province_eng    region_thai region_eng variable value
+  &lt;date&gt;     &lt;chr&gt;         &lt;chr&gt;           &lt;chr&gt;       &lt;chr&gt;      &lt;chr&gt;    &lt;dbl&gt;
+1 2019-01-01 กรุงเทพมหานคร  BANGKOK         ภาคกลาง     central    ratio_t…  93.4
+2 2019-01-01 ลพบุรี          LOPBURI         ภาคกลาง     central    ratio_t…  61.3
+3 2019-01-01 พระนครศรีอยุธยา PHRA NAKHON SI… ภาคกลาง     central    ratio_t…  73.4
+4 2019-01-01 สระบุรี         SARABURI        ภาคกลาง     central    ratio_t…  67.3
+5 2019-01-01 ชัยนาท         CHAINAT         ภาคกลาง     central    ratio_t…  79.3
+6 2019-01-01 นครปฐม        NAKHON PATHOM   ภาคกลาง     central    ratio_t…  71.7</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb31"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a><span class="co"># pivot the data to have variables as columns</span></span>
+<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a>tourism_wide <span class="ot">&lt;-</span> tourism_data_clean <span class="sc">%&gt;%</span></span>
+<span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_wider</span>(</span>
+<span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">id_cols =</span> <span class="fu">c</span>(province_eng, date),</span>
+<span id="cb31-5"><a href="#cb31-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">names_from =</span> variable,</span>
+<span id="cb31-6"><a href="#cb31-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">values_from =</span> value</span>
+<span id="cb31-7"><a href="#cb31-7" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb31-8"><a href="#cb31-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-9"><a href="#cb31-9" aria-hidden="true" tabindex="-1"></a><span class="co"># Display the wide format data</span></span>
+<span id="cb31-10"><a href="#cb31-10" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(<span class="fu">head</span>(tourism_wide))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 6 × 10
+  province_eng      date       ratio_tourist_stay no_tourist_stay no_tourist_all
+  &lt;chr&gt;             &lt;date&gt;                  &lt;dbl&gt;           &lt;dbl&gt;          &lt;dbl&gt;
+1 BANGKOK           2019-01-01               93.4         3334971        5959075
+2 LOPBURI           2019-01-01               61.3           51858         268664
+3 PHRA NAKHON SI A… 2019-01-01               73.4          117052         730329
+4 SARABURI          2019-01-01               67.3           89850         207236
+5 CHAINAT           2019-01-01               79.3           27141          79073
+6 NAKHON PATHOM     2019-01-01               71.7          118629         296107
+# ℹ 5 more variables: no_tourist_thai &lt;dbl&gt;, no_tourist_foreign &lt;dbl&gt;,
+#   revenue_all &lt;dbl&gt;, revenue_thai &lt;dbl&gt;, revenue_foreign &lt;dbl&gt;</code></pre>
+</div>
+</div>
 
 
 

@@ -1,0 +1,183 @@
+---
+title: "In-class Exercise 06"
+author: "Leow Xian Zu"
+date: "30 Sep 2024"
+date-modified: "last-modified"
+execute:
+  eval: true
+  echo: true 
+  message: false #no more warning message
+  freeze: true #whatever document already commited does not render
+---
+
+# Emerging Hot Spot Analysis
+
+# Set up
+
+## Load packages
+
+```{r}
+pacman::p_load(tmap,       # for thematic mapping
+               sf,         # spatial data handling
+               sfdep,      # spatial dependence analysis
+               plotly,     # interactive plotting
+               tidyverse,
+               Kendall
+               )  # data manipulation & viz
+set.seed(1234)
+```
+
+## Read data
+
+```{r}
+hunan <- st_read(dsn = "data/geospatial", 
+                 layer = "Hunan")
+GDPPC <- read_csv("data/aspatial/Hunan_GDPPC.csv")
+
+hunan2012 <- read_csv("data/aspatial/Hunan_2012.csv")
+library(readxl)
+hunangdp <- read_excel("data/aspatial/Hunan_GDP.xlsx")
+
+```
+
+Let's examine GDPPC.
+
+```{r}
+summary(GDPPC)
+```
+
+```{r}
+GDPPC_st <- spacetime(GDPPC,                   # Attribute data
+                      hunan,                   # Spatial data
+                      .loc_col = "County",     # specifying location
+                      .time_col = "Year"       # Specifying time, expecting integer
+                      )
+is_spacetime_cube(GDPPC_st)
+```
+
+Check out the documentation for the spacetime cube function.
+
+https://sfdep.josiahparry.com/articles/spacetime-s3.html
+
+There are several spacetime objects. Under sfdep, it is a tidyverse object. It cannot handle dynamic position (e.g. trajectories or flows). Boundaries change.
+
+This code creates a spacetime cube object, combining spatial (hunan) and temporal (GDPPC) data. It's organizing the GDP per capita data by county and year.
+
+```{r}
+GDPPC_nb <- GDPPC_st %>%
+  activate("geometry") %>%                #Activate is used to activate the geometry context
+  mutate(nb = include_self(               #Mutate used to create new nb and wt
+    st_contiguity(geometry)),
+    wt = st_inverse_distance(nb,
+                             geometry,
+                             scale = 1,
+                             alpha = 1),
+    .before = 1) %>%
+  set_nbs("nb") %>%                         #Avoid itchy hand to sort
+  set_wts("wt")                             
+```
+
+This code is creating spatial weights and neighbor relationships for the counties. It's using contiguity-based neighbors and inverse distance weighting.
+
+Let's compute Gi\*
+
+```{r}
+gi_stars <- GDPPC_nb %>%
+  group_by(Year) %>%
+  mutate(gi_star = local_gstar_perm(
+    GDPPC, nb, wt)) %>%
+  tidyr::unnest(gi_star)
+```
+
+This calculates the Getis-Ord G\* statistic for each county and year, which helps identify hot spots and cold spots of GDP per capita.
+
+Man-Kendall test.
+
+The Mann-Kendall test is a non-parametric statistical method used for trend analysis in time series data. It performs confirmatory testing to detect the presence of monotonic trends in a dataset. This test is particularly useful for environmental, climate, and hydrological time series where data may not be normally distributed. The Mann-Kendall test assesses whether there is a statistically significant upward or downward trend over time, without assuming any particular distribution of the data. It examines the sign of all possible pairs of observations in the series and calculates a statistic based on the number of positive and negative differences. The test is robust against outliers and can handle missing values, making it versatile for various types of time series analyses. The result indicates whether there is a significant monotonic (consistently increasing or decreasing) trend, but does not specify the magnitude of the trend.
+
+A monotonic series or function is one that only increases (or decreases) and never changes direction. So long as the function either stays flat or continues to increase, it is monotonic.\
+H0: No monotonic trend\
+H1: Monotonic trend is present
+
+\
+Interpretation\
+Reject the null-hypothesis null if the p-value is smaller than the alpha value (i.e. 1-confident level)\
+Tau ranges between -1 and 1 where:\
+-1 is a perfectly decreasing series, and\
+" 1 is a perfectly increasing series.
+
+The Mann-Kendall test checks if data consistently goes up or down over time, without caring about how much it changes or assuming the data follows any specific pattern.
+
+```{r}
+cbg <- gi_stars %>%
+  ungroup() %>%
+  filter(County == "Changsha") %>%
+  select(County, Year, gi_star)
+p <- ggplot(data = cbg,
+            aes(x = Year,
+                y = gi_star)) +
+  geom_line() + 
+  theme_light()
+ggplotly(p) #Interactive version. Wrap with a ggplot version.
+```
+
+Let's test it
+
+```{r}
+cbg %>%
+  summarise(mk = list(
+    unclass(
+      Kendall::MannKendall(gi_star)))) %>%
+    tidyr::unnest_wider(mk)
+```
+
+Look at the Tau value. Since it's slightly nearer to 1, it appears like a increasing series.
+
+Let's do this for the whole cube.
+
+```{r}
+ehsa <- gi_stars %>%
+  group_by(County) %>%
+  summarise(mk = list(
+    unclass(
+      Kendall::MannKendall(gi_star)))) %>%
+    tidyr::unnest_wider(mk)
+head(ehsa)
+```
+
+This code performs the Mann-Kendall test for each county to detect trends in the G\* statistics over time.
+
+```{r}
+ehsa <- emerging_hotspot_analysis(x = GDPPC_st,
+                                  .var = "GDPPC",
+                                  k = 1,
+                                  nsim = 99
+                                  )
+```
+
+This is performing an Emerging Hot Spot Analysis, which identifies trends in the spatial clusters over time. It's using 99 simulations to assess statistical significance.
+
+Lastly, we will perform EHSA analysis by using emerging_hotspot_analysis() of sfdep package. It takes a spacetime object x s: (i.e. GDPPC_st), \> and the quoted name of the ) variable of interest (i.e. GDPPC) for .var argument. The k argument is used to specify the number of time lags which iS set to 1 by default Lastly, nsim map numbers of simulation to be performed.
+
+```{r}
+ggplot(data = ehsa,
+       aes(x = classification)) +
+  geom_bar()
+```
+
+```{r}
+hunan_ehsa <- hunan %>%
+  left_join(ehsa,
+            by = join_by(County == location))
+ehsa_sig <- hunan_ehsa %>%
+  filter(p_value < 0.05)
+tmap_mode("plot")
+tm_shape(hunan_ehsa) +
+  tm_polygons()+
+  tm_borders(alpha = 0.5)+
+tm_shape(ehsa_sig) + tm_fill("classification") +tm_borders(alpha = 0.4)
+```
+
+This final block is joining the EHSA results with the spatial data and creating a map to visualize the significant hot and cold spots across the Hunan province.
+
+Overall, this code is conducting a comprehensive spatial-temporal analysis of GDP per capita in Hunan, identifying significant clusters and their trends over time.

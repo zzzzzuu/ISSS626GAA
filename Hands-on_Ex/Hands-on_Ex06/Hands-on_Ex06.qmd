@@ -294,11 +294,13 @@ ggarrange(r, s, z,
 
 The histograms shown provide a visual comparison of data distribution before and after two different standardization techniques: Min-Max Standardization and Z-score Standardization. Here are the key statistical conclusions we can draw:
 
-1.   Raw data distribution:
+1.  Raw data distribution:
 
-    -    The original data (leftmost histogram) appears to be right-skewed, with most values concentrated between 0 and 300.
+```         
+-    The original data (leftmost histogram) appears to be right-skewed, with most values concentrated between 0 and 300.
 
-    -    There's a long tail extending to the right, with some values reaching up to 50
+-    There's a long tail extending to the right, with some values reaching up to 50
+```
 
 2.  Min-Max Standardization:
 
@@ -383,7 +385,7 @@ ac <- function(x) {
 map_dbl(m, ac)
 ```
 
-With reference to the output above, we can see that Ward\'s method provides the strongest clustering structure among the four methods assessed. Hence, in the subsequent analysis, only Ward\'s method will be used.
+With reference to the output above, we can see that Ward's method provides the strongest clustering structure among the four methods assessed. Hence, in the subsequent analysis, only Ward's method will be used.
 
 ## Determining optimal clusters
 
