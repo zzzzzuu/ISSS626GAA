@@ -10,40 +10,45 @@ execute:
   freeze: true #whatever document already commited does not render
 ---
 
-tourism revenue no tevenly distributed. there are variations.
+# Foreword
 
-our interest is where they are located. spatial dsitribution.
+Tourism plays a vital role in Thailand's economy, contributing significantly to its gross domestic product (GDP). In 2019, the country's tourism sector generated S\$106 billion from both domestic and international visitors, accounting for approximately 20% of the nation's GDP. In comparison, Singapore's tourism contributes to only 3-4% of our GDP.
 
-look into where are the hotspots, spatial autocorrelation, where are the clusters, outliers,
+However, the COVID-19 pandemic dealt a severe blow to this thriving industry, causing revenues to plummet to S\$31 billion in 2020.
 
-we want to see the tynamic of it. we want to know which one changed most significantly over time and how we classified them.
+Despite this setback, recent data indicates a gradual recovery in Thailand's tourism sector. However, it is crucial to note that the tourism economy is not uniformly distributed across the country. Three provinces---Bangkok, Phuket, and Chiang Mai---have historically been the focal points of Thailand's tourism industry.
 
-we are looking at key indicators of tourism economy. it's NOT 1 only. there are more than 1 indicators.
+Given this context, this report aims to conduct a comprehensive spatial and spatio-temporal analysis of Thailand's tourism economy at the province level, with a particular focus on the impacts of COVID-19. The primary objectives of this study are:
 
-like , total revenue, is 1 indicator. see if there are any others.
+1.  To determine whether key indicators of Thailand's tourism economy exhibit spatial and spatio-temporal dependence.
 
-if tourism economy is dependent on space and time, we wanna find cluster, outlier, hotspot and coldspot.
+2.  If such dependence is established, to identify clusters, outliers, and emerging hot/cold spot areas within the country.
 
-data, province level, incl. bangkok. we used it before. we only need the province level. just one.
+To achieve these objectives, this report will employ various spatial and spatio-temporal statistical methods, including:
 
-attribute in thin and long several years and attribute. reorganise table for analysis.
+-   Global spatial autocorrelation analysis
 
-Geosptial data is high resolution. many small islands. we need to be careful about centroids don't end up in water.
+-   Local spatial autocorrelation analysis
 
-revenue covers precovid during covid and post covid. inherent patterns. pre-covid has change already. We are more interested in space time changes.
+-   Emerging hotspot analysis
 
-Spatial, unequal also. bangkok highest. How these spatial changes over time.
+By utilising these geospatial analytics techniques, this study seeks to provide insights into the changing dynamics of Thailand's tourism economy in the wake of the COVID-19 pandemic. These findings could prove useful for policymakers, industry stakeholders, and researchers in understanding the spatial patterns of tourism recovery and planning for resilience in the sector.
 
-key indicator(S). look at multiple and different measures to allow us to better understand tourism economy.
-
-Thailand administrative level 0 (country), 1 (province), 2 (district), 3 (sub-district, tambon) gazetteer. Need to include bangkok but bangkok is a city
-
-Need to change the month into integers to do spacetime cube.
+# Set up
 
 ```{r}
 # Load required libraries
-library(sf)
-library(ggplot2)
+pacman::p_load(
+  tidyverse,    # for data manipulation and visualization
+  sf,           # for spatial data handling
+  sfdep,        # for spatial dependence in sf
+  tmap,         # for thematic maps
+  lubridate,    # for date/time manipulation
+  ggplot2,      # for advanced plotting
+  plotly,       # for plotly tool
+  readr         # for importing data
+)
+set.seed(1234)
 
 # Import the shapefile
 thailand <- st_read("data/tha_admbnda_adm1_rtsd_20220121.shp")
@@ -55,21 +60,22 @@ ggplot() +
   labs(title = "Thailand Administrative Boundaries (Province Level)")
 ```
 
+This appears to be the correct boundaries. Let's change it to the right CRS first, to be correct, even though it will not affect out analysis.
+
 ```{r}
-thailand_utm <- st_transform(thailand, crs = 32647)
+thailand_utm <- st_transform(thailand, crs = 32647) %>%
+  mutate(ADM1_EN = toupper(ADM1_EN))
 thailand_utm
 ```
 
+Let's import the data and change it to wide form.
+
 ```{r}
-# Load required libraries
-library(readr)
-library(dplyr)
-library(tidyr)
 
 # Import the CSV file
 tourism_data <- read_csv("data/thailand_domestic_tourism_2019_2023_ver2.csv")
 
-# Display the first few rows and structure of the data
+# Display the first few rows and structure of the data to check
 print(head(tourism_data))
 glimpse(tourism_data)
 
@@ -80,14 +86,12 @@ sum(is.na(tourism_data))
 tourism_data_clean <- tourism_data %>%
   # Remove any rows with missing values
   na.omit() %>%
-  # Ensure province names match those in the shapefile (you may need to adjust this)
   mutate(province_eng = toupper(province_eng))
 
 # Display the first few rows of the cleaned data
 print(head(tourism_data_clean))
 
-
-# pivot the data to have variables as columns
+# Pivot the data to have variables as columns
 tourism_wide <- tourism_data_clean %>%
   pivot_wider(
     id_cols = c(province_eng, date),
@@ -95,6 +99,586 @@ tourism_wide <- tourism_data_clean %>%
     values_from = value
   )
 
+tourism_wide <- tourism_wide %>%
+  mutate(province_eng = case_when(
+    province_eng == "PHANG NGA" ~ "PHANGNGA",
+    province_eng == "LOPBURI" ~ "LOP BURI",
+    province_eng == "CHAINAT" ~ "CHAI NAT",
+    province_eng == "CHONBURI" ~ "CHON BURI",
+    province_eng == "PRACHINBURI" ~ "PRACHIN BURI",
+    province_eng == "BURIRAM" ~ "BURI RAM",
+    province_eng == "SISAKET" ~ "SI SA KET",
+    province_eng == "NONG BUA LAMPHU" ~ "NONG BUA LAM PHU",
+    TRUE ~ province_eng  # Keep other names unchanged
+  ))
+
 # Display the wide format data
 print(head(tourism_wide))
 ```
+
+# Exploratory Spatial Data Analysis
+
+## What data do we have?
+
+-   "ratio_tourist_stay": Refers to the ratio of tourists who stay overnight.
+
+-   "no_tourist_stay": Refers to the number of tourists who stay overnight.
+
+-   "no_tourist_all": Refers to the total number of tourists.
+
+-   "no_tourist_thai": Refers to the number of domestic Thai tourists.
+
+-   "no_tourist_foreign": Refers to the number of foreign tourists.
+
+-   "revenue_all": Refers to total tourism revenue.
+
+-   "revenue_thai": Refers to revenue from domestic tourists.
+
+-   "revenue_foreign": Refers to revenue from foreign tourists.
+
+## Join data
+
+```{r}
+# Calculate average values for each province across all time periods
+tourism_summary <- tourism_wide %>%
+  group_by(province_eng) %>%
+  summarise(
+    avg_ratio_tourist_stay = mean(ratio_tourist_stay, na.rm = TRUE),
+    avg_no_tourist_stay = mean(no_tourist_stay, na.rm = TRUE),
+    avg_no_tourist_all = mean(no_tourist_all, na.rm = TRUE),
+    avg_no_tourist_thai = mean(no_tourist_thai, na.rm = TRUE),
+    avg_no_tourist_foreign = mean(no_tourist_foreign, na.rm = TRUE),
+    avg_revenue_all = mean(revenue_all, na.rm = TRUE),
+    avg_revenue_thai = mean(revenue_thai, na.rm = TRUE),
+    avg_revenue_foreign = mean(revenue_foreign, na.rm = TRUE),
+    pct_foreign_tourists = mean(no_tourist_foreign / no_tourist_all * 100, na.rm = TRUE),
+    pct_foreign_revenue = mean(revenue_foreign / revenue_all * 100, na.rm = TRUE)
+  )
+
+tourism_summary <- tourism_summary %>%
+  mutate(province_eng = case_when(
+    province_eng == "PHANG NGA" ~ "PHANGNGA",
+    province_eng == "LOPBURI" ~ "LOP BURI",
+    province_eng == "CHAINAT" ~ "CHAI NAT",
+    province_eng == "CHONBURI" ~ "CHON BURI",
+    province_eng == "PRACHINBURI" ~ "PRACHIN BURI",
+    province_eng == "BURIRAM" ~ "BURI RAM",
+    province_eng == "SISAKET" ~ "SI SA KET",
+    province_eng == "NONG BUA LAMPHU" ~ "NONG BUA LAM PHU",
+    TRUE ~ province_eng  # Keep other names unchanged
+  ))
+
+# Join the summary data with the spatial data
+thailand_tourism <- thailand_utm %>%
+  mutate(ADM1_EN = toupper(ADM1_EN)) %>%
+  left_join(tourism_summary, by = c("ADM1_EN" = "province_eng"))
+```
+
+## Take a look at chloropleth maps
+
+```{r}
+# Map of average ratio of tourist stays
+tm_shape(thailand_tourism) +
+  tm_fill("avg_ratio_tourist_stay", 
+          style = "quantile", 
+          palette = "YlOrRd",
+          title = "Avg. Ratio of Tourist Stays (%)") +
+  tm_borders() +
+  tm_layout(main.title = "Average Ratio of Tourist Stays in Thailand",
+            main.title.position = "center",
+            main.title.size = 1.2,
+            legend.outside = TRUE,
+            legend.outside.position = "right")
+
+# Map of average total revenue
+tm_shape(thailand_tourism) +
+  tm_fill("avg_revenue_all", 
+          style = "quantile", 
+          palette = "YlOrRd",
+          title = "Avg. Total Revenue (Baht)") +
+  tm_borders() +
+  tm_layout(main.title = "Average Total Tourism Revenue in Thailand",
+            main.title.position = "center",
+            main.title.size = 1.2,
+            legend.outside = TRUE,
+            legend.outside.position = "right")
+
+# Map of percentage of foreign tourists
+tm_shape(thailand_tourism) +
+  tm_fill("pct_foreign_tourists", 
+          style = "quantile", 
+          palette = "YlOrRd",
+          title = "% Foreign Tourists") +
+  tm_borders() +
+  tm_layout(main.title = "Percentage of Foreign Tourists in Thailand",
+            main.title.position = "center",
+            main.title.size = 1.2,
+            legend.outside = TRUE,
+            legend.outside.position = "right")
+
+# Map of percentage of revenue from foreign tourists
+tm_shape(thailand_tourism) +
+  tm_fill("pct_foreign_revenue", 
+          style = "quantile", 
+          palette = "YlOrRd",
+          title = "% Revenue from Foreign Tourists") +
+  tm_borders() +
+  tm_layout(main.title = "% of Revenue from Foreign Tourists in Thailand",
+            main.title.position = "center",
+            main.title.size = 1.2,
+            legend.outside = TRUE,
+            legend.outside.position = "right")
+```
+
+1.  Average Ratio of Tourist Stays in Thailand: This map shows the percentage of tourists who stay overnight in different regions of Thailand. The northern and central regions appear to have higher ratios of tourist stays (40-52%), indicated by the darker red colors. This suggests these areas may have more developed accommodation infrastructure or attractions that encourage longer visits. Coastal areas in the south show a mix of high and low stay ratios, possibly reflecting differences between popular beach resorts and transit areas.
+
+2.  Average Total Tourism Revenue in Thailand: The revenue map highlights significant disparities in tourism income across Thailand. Major tourist destinations like Bangkok, Phuket, and Chiang Mai (identifiable by the dark red areas) generate substantially higher revenues, ranging from 841 million to 36,939 million Baht. This concentration of revenue suggests a highly uneven distribution of tourism benefits across the country, with a few key areas dominating the industry.
+
+3.  Percentage of Foreign Tourists in Thailand: This map illustrates the distribution of international visitors. Coastal areas and major cities show the highest percentages of foreign tourists (9.23% to 45.51%), particularly in the south and around Bangkok. This pattern likely reflects the popularity of beach destinations and cultural sites among international travelers. Interior and northern regions generally have lower percentages of foreign visitors, suggesting a greater reliance on domestic tourism.
+
+4.  Percentage of Revenue from Foreign Tourists in Thailand: The revenue contribution from foreign tourists closely mirrors the distribution of foreign visitors. Coastal areas and major tourist hubs show the highest percentages (12.33% to 65.54%) of revenue from international visitors. This indicates that these regions not only attract more foreign tourists but also derive a significant portion of their tourism income from them. The pattern underscores the economic importance of international tourism to these areas and their potential vulnerability to global travel disruptions.
+
+These show an average of Thailand's tourism landscape, possibly cluing us into regional disparities in tourist stays, overall revenue, and the role of international visitors in the country's tourism economy.
+
+Let's take a look at the bar chart.
+
+```{r}
+
+# Create the histogram
+mean_revenue <- mean(tourism_summary$avg_revenue_all, na.rm = TRUE)
+
+ggplot(tourism_summary, aes(x = avg_revenue_all)) +
+  geom_histogram(bins = 30, fill = "skyblue", color = "black") +
+  geom_vline(xintercept = mean_revenue, color = "red", linetype = "dashed", size = 1) +
+  annotate("text", x = mean_revenue, y = Inf, label = "Mean", 
+           vjust = 2, color = "red") +
+  theme_minimal() +
+  labs(title = "Distribution of Average Tourism Revenue Across Provinces",
+       subtitle = paste("Mean Revenue:", scales::comma(mean_revenue)),
+       x = "Average Revenue (All)",
+       y = "Count") +
+  scale_x_continuous(labels = scales::comma)
+
+
+mean_revenue_log <- mean(log(tourism_summary$avg_revenue_all), na.rm = TRUE)
+
+ggplot(tourism_summary, aes(x = log(avg_revenue_all))) +
+  geom_histogram(bins = 30, fill = "skyblue", color = "black") +
+  geom_vline(xintercept = mean_revenue_log, color = "red", linetype = "dashed", size = 1) +
+  annotate("text", x = mean_revenue_log, y = Inf, label = "Mean", 
+           vjust = 2, color = "red") +
+  theme_minimal() +
+  labs(title = "Distribution of Log of Average Tourism Revenue Across Provinces",
+       subtitle = paste("Mean LogRevenue:", scales::comma(mean_revenue_log)),
+       x = "Log of Average Revenue (All)",
+       y = "Count") +
+  scale_x_continuous(labels = scales::comma)
+```
+
+Using log removes the skewness of the data and possibly can help us account for more of Thailand's tourism activity. This accounts for the outlier that is Bangkok, which naturally gains more turism receipts than other provinces.
+
+# Global Moran's I test
+
+Monte Carlo Moran's I is a statistical technique used to assess whether the spatial pattern observed in data is significantly different from what would be expected by random chance alone.
+
+In this analysis, I will perform Moran's I test on both the average revenue (avg_revenue_all) and its logarithmic transformation (log(avg_revenue_all)) to gain a more comprehensive understanding of the spatial autocorrelation patterns in Thailand's tourism revenue. This approach is taken because tourism revenue data has a skewed distribution, with a few provinces generating significantly higher revenues than others. By using the raw average revenue, we can identify spatial patterns in the absolute economic impact of tourism across provinces. However, this may be dominated by extreme values in high-revenue areas. The log transformation, on the other hand, helps to normalise the data distribution, reducing the impact of outliers and allowing us to detect spatial patterns in the relative differences of tourism performance across provinces. This transformation can reveal subtler spatial relationships that might be obscured in the raw data. The differing results between these two tests can provide insights into whether the spatial clustering is driven primarily by absolute revenue values or by proportional differences between provinces, offering a more nuanced view of the spatial dynamics in Thailand's tourism economy.
+
+First let's test whether the average total revenue happened by random chance. To do so, we first need a contiguity matric. We'll use queen's contiguity.
+
+```{r}
+# Calculate queen's contiguity
+thailand_nb <- st_contiguity(thailand_tourism, queen = TRUE)
+
+# Identify regions with no neighbors
+no_neighbors <- which(sapply(thailand_nb, function(x) x[1] == 0))
+no_neighbors
+
+# Manually add nearest neighbor for regions with no neighbors
+thailand_nb[[67]] <- as.integer(66)
+thailand_nb[[66]] <- as.integer(unique(c(thailand_nb[[66]], 67)))
+str(thailand_nb)
+# Link Phuket to Phang Nga and vice versa because they are linked by bridge
+
+# Check is still got empty
+no_neighbors <- which(sapply(thailand_nb, function(x) x[1] == 0))
+no_neighbors
+
+
+thailand_weights <- st_weights(thailand_nb, style = "W")
+
+wm_q <- thailand_tourism %>%
+    mutate(
+        nb = thailand_nb,   
+        wt = thailand_weights,
+        .before = 1
+    )
+
+# Check the resulting structure
+str(wm_q)
+```
+
+```{r}
+# Perform Monte Carlo simulation for Moran's I
+
+mc_moran <- global_moran_test(
+  log(thailand_tourism$avg_revenue_all),
+  thailand_nb,
+  thailand_weights
+)
+# Print the results
+print(mc_moran)
+
+```
+
+1.  Moran's I statistic is close to zero, suggesting weak spatial autocorrelation. A value of -1 indicates perfect dispersion, +1 indicates perfect correlation, and 0 indicates a random spatial pattern.
+
+2.  p-value is \> 0.05. This indicates that we fail to reject the null hypothesis of spatial randomness. There is no significant evidence of positive spatial autocorrelation in average total revenue across Thailand's provinces. The spatial pattern of tourism revenue appears to be randomly distributed, rather than clustered or dispersed.
+
+Let's take a look at Monte Carlo Simluation
+
+```{r}
+
+mc_moran_sim <- global_moran_perm(
+  thailand_tourism$avg_revenue_all,
+  thailand_nb,
+  thailand_weights,
+  nsim = 999  # number of simulations
+)
+
+# Print the results
+print(mc_moran_sim)
+
+# Visualize the results
+hist(mc_moran_sim$res, 
+     freq = TRUE, 
+     breaks = 20, 
+     xlab = "Moran's I", 
+     main = "Histogram of simulated Moran's I")
+abline(v = 0, col = "red", lwd = 2)
+
+
+```
+
+It appears that findings are similar to that one the single test.
+
+This suggests that high or low tourism revenue in one province does not necessarily correspond to similar values in neighboring provinces. The economic performance of the tourism sector in each province seems to be independent of its geographical location relative to other provinces. This may be because tourism doesn't spread out from the popular places. Rather, if tourists are interested in surrounding areas, they would fly straight to that destination.
+
+Or this could be because we used average revenue. Let's take a look at logged value.
+
+```{r}
+# Perform Monte Carlo simulation for Moran's I
+
+mc_moran <- global_moran_test(
+  log(thailand_tourism$avg_revenue_all),
+  thailand_nb,
+  thailand_weights
+)
+# Print the results
+print(mc_moran)
+
+```
+
+Moran's I statistic is positive. It indicates a positive spatial autocorrelation. It suggests that similar values (either high or low) of average revenue tend to cluster together geographically more than would be expected by chance.
+
+p-value is below the significance level of 0.05. It indicates strong evidence against the null hypothesis of spatial randomness. In other words, the spatial pattern observed is very unlikely to have occurred by chance.
+
+The results provide strong evidence of positive spatial autocorrelation in the log-transformed average tourism revenue across Thailand's provinces. This means that provinces with high tourism revenues tend to be located near other provinces with high revenues, and provinces with low revenues tend to be near other low-revenue provinces.
+
+Let's try applying this to the change in revenue from Jul 2021 (trough of revenue) and Jan 2023 (one of the peaks in revenue).
+
+```{r}
+revenue_comparison <- tourism_wide %>%
+  filter(date %in% c(as.Date("2021-07-01"), as.Date("2023-01-01"))) %>%
+  select(province_eng, date, revenue_all) %>%
+  pivot_wider(names_from = date, values_from = revenue_all, names_prefix = "revenue_") %>%
+  mutate(
+    delta_jul21_jan23 = `revenue_2023-01-01` - `revenue_2021-07-01`,
+    province_eng = toupper(province_eng)
+  ) %>%
+  select(province_eng, delta_jul21_jan23)
+
+# Now, let's join this new data to our existing thailand_tourism dataframe
+thailand_tourism_diff <- thailand_tourism %>%
+  left_join(revenue_comparison, by = c("ADM1_EN" = "province_eng"))
+
+mc_moran_diff <- global_moran_perm(
+  thailand_tourism_diff$delta_jul21_jan23,
+  thailand_nb,
+  thailand_weights,
+  nsim=999
+)
+# Print the results
+print(mc_moran_diff)
+```
+
+Based on these results, there is no significant evidence of spatial autocorrelation in the changes in tourism revenue across Thailand's provinces between July 2021 and January 2023. The spatial pattern of revenue changes appears to be randomly distributed, rather than clustered or dispersed.
+
+This suggests that the recovery (or changes) in tourism revenue from July 2021 to January 2023 was not geographically dependent. Neighboring provinces did not necessarily experience similar trends in revenue changes. It could be possible that during recovery, tourists flocked to popular places first. The tourism dollars did not spill into neighbouring provinces.
+
+# Local Indicators of Spatial Association
+
+```{r}
+lisa <- thailand_tourism_diff %>% 
+  mutate(local_moran = local_moran(
+    thailand_tourism_diff$avg_revenue_all,
+    thailand_nb, 
+    thailand_weights, 
+    nsim = 99,),
+    .before = 1) %>%
+  unnest(local_moran)
+
+tmap_mode("plot")
+localMI.ii <- tm_shape(lisa) +
+  tm_fill(col = "ii", 
+          style = "pretty", 
+          title = "local Moran's I of Revenue") +
+  tm_borders(alpha = 0.5)
+
+localMI.p_ii <- tm_shape(lisa) +
+  tm_fill(col = "p_ii", 
+          breaks=c(-Inf, 0.001, 0.01, 0.05, 0.1, Inf),
+          palette="-Blues", 
+          title = "local Moran's I of Revenue") +
+  tm_borders(alpha = 0.5)
+
+tmap_arrange(localMI.ii, localMI.p_ii, asp=1, ncol=2)
+
+```
+
+Most provinces shows values between -0.5 and 0.5 (yellow to light green), indicating weak spatial autocorrelation. But there is a notable red area in the central region (Bangkok and surrounding provinces) with values between -2.0 to -1.5, suggesting strong negative spatial autocorrelation.
+
+The blue map shows the statistical significance of the Local Moran's I values. A cluster of dark blue areas (p \< 0.001) is visible in the central region, corresponding to thearea surrounding the red area in the yellow map. Most other areas are light blue or white, indicating less significant or non-significant results.
+
+Bangkok shows strong, statistically significant negative spatial autocorrelation. This suggests that this area's revenue is significantly different from its neighbors. This might be a Low-High Cluster. The strong negative values in Bangkok, combined with high statistical significance, suggest this area might be a "low-high" cluster - an area with low values surrounded by high values (or vice versa).
+
+Similarly, we should take a look at the normalised values.
+
+```{r}
+lisa <- thailand_tourism_diff %>% 
+  mutate(local_moran = local_moran(
+    log(thailand_tourism_diff$avg_revenue_all),
+    thailand_nb, 
+    thailand_weights, 
+    nsim = 99,),
+    .before = 1) %>%
+  unnest(local_moran)
+
+tmap_mode("plot")
+localMI.ii <- tm_shape(lisa) +
+  tm_fill(col = "ii", 
+          style = "pretty", 
+          title = "local Moran's I of Revenue") +
+  tm_borders(alpha = 0.5)
+
+localMI.p_ii <- tm_shape(lisa) +
+  tm_fill(col = "p_ii", 
+          breaks=c(-Inf, 0.001, 0.01, 0.05, 0.1, Inf),
+          palette="-Blues", 
+          title = "local Moran's I of Revenue") +
+  tm_borders(alpha = 0.5)
+
+tmap_arrange(localMI.ii, localMI.p_ii, asp=1, ncol=2)
+```
+
+The log-transformed revenue data reveals more nuanced spatial patterns compared to the raw revenue data. This suggests that relative differences in tourism revenue between neighboring provinces are important. High-High Clusters: The northeastern region shows signs of positive autocorrelation with high significance. This could indicate a cluster of provinces with similarly high (relative to their scale) tourism revenues. Low-Low Clusters: Some central and southern provinces show negative autocorrelation, which might represent clusters of provinces with lower tourism revenues relative to their neighbors.
+
+The eastern seaboard's significant results suggest a distinct tourism pattern in this region, possibly related to coastal and industrial tourism.
+
+This analysis reveals that the spatial patterns of tourism revenue in Thailand are more complex when considering relative performance rather than absolute values.
+
+# **Hot Spot and Cold Spot Area Analysis (HCSA)**
+
+```{r}
+gi_stars <- thailand_tourism_diff %>%
+  mutate(
+    gi_star = local_g_perm(
+      log(avg_revenue_all),
+      nb = thailand_nb,
+      wt = thailand_weights,
+      nsim = 999
+    )
+  ) %>%
+  unnest(gi_star)
+
+gistarplot <- tm_shape(gi_stars) +
+  tm_fill(
+    col = "gi",
+    style = "pretty",
+    palette = "-RdBu",
+    midpoint = 0,
+    title = "Gi* Statistic"
+  ) +
+  tm_borders(alpha = 0.5) +
+  tm_layout(
+    main.title = "Hot Spot and Cold Spot Analysis of Tourism Revenue",
+    main.title.size = 0.8
+  )
+
+gistarpplot<-tm_shape(gi_stars) +
+  tm_fill(
+    col = "p_value",
+    breaks = c(-Inf, 0.001, 0.01, 0.05, 0.1, Inf),
+    palette = "-Blues",
+    title = "p-value of Gi*"
+  ) +
+  tm_borders(alpha = 0.5) +
+  tm_layout(
+    main.title = "Significance of Hot and Cold Spots",
+    main.title.size = 0.8
+  )
+tmap_arrange(gistarplot, gistarpplot, asp=1, ncol=2)
+```
+
+Let's analyse the Hot Spot and Cold Spot Analysis (HCSA) maps for tourism revenue in Thailand.
+
+Northeastern sees a large cluster of dark blue provinces, indicating a significant cold spot (low values clustered together). Central region (including Bangkok): Shows a mix of red and blue, indicating a complex pattern of hot and cold spots. Southern region: Exhibits mostly orange to red colors, suggesting potential hot spots, especially in popular tourist destinations.
+
+Many provinces, especially in the north and west, show less significant or non-significant results (light blue to white).
+
+Northeastern Cold Spot is a large, statistically significant cold spot that suggests that this region consistently underperforms in tourism revenue compared to the other provinces. This could be due to less developed tourism infrastructure or fewer popular attractions. Eastern Seaboard Hot Spot is a significant hot spot indicating a cluster of high-performing provinces in terms of tourism revenue. This could be attributed to popular beach destinations, well-developed infrastructure, or proximity to Bangkok. Bangkok and Central Region has a mixed pattern around Bangkok suggests a complex tourism landscape, possibly reflecting the capital's unique position and its impact on surrounding areas. Southern Tourism Strength: The tendency towards hot spots in the south, although with varying significance, aligns with the popularity of southern beach destinations. The clustering of significant results confirms that tourism performance is indeed spatially dependent, with neighboring provinces often showing similar patterns.
+
+# Emerging hot spot cold spot analysis
+
+While the Hot Spot and Cold Spot Analysis (HCSA) provides valuable insights into the spatial patterns of Thailand's tourism revenue, it offers only a static snapshot of the situation. This approach, though informative, is insufficient for capturing the dynamic nature of the tourism industry, especially in the context of recovering from the COVID-19 pandemic. Tourism patterns can change significantly over time due to factors such as seasonality, economic fluctuations, policy changes, and global events. The emerging hot spot analysis addresses this limitation by incorporating a temporal dimension into our spatial analysis. By creating a space-time cube, we can examine how tourism revenue patterns have evolved over different time periods. This approach allows us to identify not just areas of high or low performance, but also emerging trends, such as areas that are becoming increasingly popular (emerging hot spots) or those experiencing declining tourism activity (emerging cold spots). Such temporal-spatial analysis is particularly crucial in the post-pandemic context, as it can reveal which areas are recovering faster, which are struggling to regain their tourism momentum, and where new tourism patterns might be emerging. This dynamic view is essential for policymakers and stakeholders in developing adaptive strategies that respond to the changing landscape of Thailand's tourism industry.
+
+```{r}
+
+tourism_log <- tourism_wide %>%
+  mutate(revenue_all = if_else(revenue_all == 0, 1, revenue_all)) %>% #change zeroes to 1 to have a full log
+  mutate(log_revenue_all = log(revenue_all))
+
+# Create running month column
+
+tourism_log_time <- tourism_log %>%
+  mutate(
+    running_month = (as.numeric(format(date, "%Y")) - 2019) * 12 + as.numeric(format(date, "%m")),
+    year = year(date),
+    month = month(date),
+    day = day(date) 
+  ) %>%
+  rename(ADM1_EN=province_eng)
+  
+
+tourism_spacetime <- spacetime(tourism_log_time, thailand_utm,
+                      .loc_col = "ADM1_EN",
+                      .time_col = "running_month")
+is_spacetime_cube(tourism_spacetime)
+```
+
+In this code segment, I am preparing the tourism data for a spatio-temporal analysis. First, I modify the 'revenue_all' column by replacing any zero values with 1. This is done to avoid undefined results when taking the logarithm, as log(0) is undefined. Revenue of 1 is as good as 0 as it is in Thai Baht. I then create a new column 'log_revenue_all' by applying a logarithmic transformation to the modified revenue data. This transformation helps to normalize the revenue distribution, which is often skewed in economic data.
+
+Next, I create a 'running_month' column to establish a consistent time scale across the dataset. This column represents the number of months since January 2019, allowing for a uniform temporal measure. I also extract separate columns for year, month, and day from the date column for potential additional analyses.
+
+Finally, I use the 'spacetime' function to create a spatio-temporal cube, combining the temporal data from 'tourism_log_time' with the spatial data from 'thailand_utm'. This cube structure allows me to analyze how tourism revenue changes both across different provinces (space) and over time. The 'is_spacetime_cube' function is then used to verify that the resulting object is indeed a valid spatio-temporal cube, ensuring that my data is correctly formatted for subsequent spatio-temporal analyses.
+
+## Computing Gi\*
+
+```{r}
+tourism_spacetime_nb <- tourism_spacetime %>%
+  activate("geometry") %>%
+  mutate(nb = include_self(
+    st_contiguity(geometry)),
+    wt = st_inverse_distance(nb, 
+                             geometry, 
+                             scale = 1,
+                             alpha = 1),
+    .before = 1) %>%
+  set_nbs("nb") %>%
+  set_wts("wt")
+
+#Computing Gi*
+
+gi_stars <- tourism_spacetime_nb %>% 
+  group_by(running_month) %>% 
+  mutate(gi_star = local_gstar_perm(
+    log_revenue_all , nb, wt)) %>% 
+  tidyr::unnest(gi_star)
+
+#Mann-Kendall Test on Gi*
+
+
+gistars_bkk <- gi_stars %>% 
+  ungroup() %>% 
+  filter(ADM1_EN == "BANGKOK") %>% 
+  select(ADM1_EN, running_month, gi_star)
+
+p <- ggplot(data = gistars_bkk, 
+       aes(x = running_month, 
+           y = gi_star)) +
+  geom_line() +
+  theme_light()
+
+ggplotly(p)
+```
+
+The Gi\* plot for Bangkok reveals tourism revenue trends over time. Initially, Bangkok stood as a significant hot spot, with the trend strengthening until around month 10. A slight decline followed, but Bangkok maintained its hot spot status until a sharp downturn around month 15, likely marking the onset of the COVID-19 pandemic. This period saw Bangkok's performance drop to average or below-average levels compared to surrounding areas. The subsequent months were characterized by volatility, with sharp fluctuations possibly reflecting various recovery attempts and pandemic waves. A notable dip around month 25 temporarily turned Bangkok into a cold spot. However, from month 30 onwards, a steady upward trend emerged, indicating Bangkok's gradual recovery. By the end of the period, Bangkok had largely reclaimed its pre-pandemic status as a significant hot spot for tourism revenue.
+
+## Man Kendall Test
+
+```{r}
+gistars_bkk %>%
+  summarise(mk = list(
+    unclass(
+      Kendall::MannKendall(gi_star)))) %>% 
+  tidyr::unnest_wider(mk)
+
+
+
+```
+
+This Mann-Kendall test result provides insights into the trend of the Gi\* statistic for Bangkok over time. The tau value indicates a very weak positive trend, suggesting a slight overall increase in Bangkok's status as a hot spot for tourism revenue. The p-value (represented by 'sl' in the table) of 0.8539923 is much higher than the typical significance threshold of 0.05, indicating that this trend is not statistically significant. In other words, while there's a slight positive trend in Bangkok's tourism performance relative to its neighbors over time, this trend is not strong enough to rule out the possibility that it occurred by chance. This could be because of the period during covid which is part of the observation.
+
+## Emerging hot spot and cold spot
+
+```{r}
+# Perform Emerging Hot Spot Analysis
+ehsa <- emerging_hotspot_analysis(
+  x = tourism_spacetime, 
+  .var = "log_revenue_all", 
+  k = 1, 
+  nsim = 99
+)
+
+# Create a bar plot of classifications
+ggplot(data = ehsa,
+       aes(x = classification)) +
+  geom_bar() +
+  theme_minimal() +
+  labs(title = "Distribution of EHSA Classifications",
+       x = "Classification",
+       y = "Count") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Join EHSA results with spatial data
+thailand_ehsa <- thailand_utm %>%
+  left_join(ehsa,
+            by = c("ADM1_EN" = "location"))
+
+# Filter for significant results
+ehsa_sig <- thailand_ehsa %>%
+  filter(p_value < 0.05)
+
+# Create a map
+tmap_mode("plot")
+tm_shape(thailand_ehsa) +
+  tm_polygons(col = "grey90", border.col = "white") +
+  tm_shape(ehsa_sig) +
+  tm_fill("classification", 
+          palette = "viridis", 
+          title = "EHSA Classification") + 
+  tm_borders(alpha = 0.4) +
+  tm_layout(main.title = "Emerging Hot Spots of Tourism Revenue in Thailand",
+            main.title.position = c("center", "top"),
+            main.title.size = 1,
+            legend.outside = TRUE,
+            legend.outside.position = "right",
+            frame = FALSE) +
+  tm_compass(type = "8star", position = c("right", "top")) +
+  tm_scale_bar(position = c("left", "bottom"))
+```
+
+The overall pattern points to a varied tourism landscape in Thailand:
+
+-   The lack of pattern in many inland areas might indicate a more stable, possibly domestic-oriented tourism sector less affected by international trends.
+
+-   The sporadic nature of both hot and cold spots in various regions highlights the complex and changing nature of Thailand's tourism industry, possibly influenced by factors such as covid.
