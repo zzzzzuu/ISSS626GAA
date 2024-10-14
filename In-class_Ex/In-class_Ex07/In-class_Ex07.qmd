@@ -1,0 +1,11 @@
+---
+title: "In-class Exercise 7"
+author: "Leow Xian Zu"
+date: "14 Oct 2024"
+date-modified: "last-modified"
+execute:
+  eval: true
+  echo: true 
+  message: false #no more warning message
+  freeze: true #whatever document already commited does not render
+---

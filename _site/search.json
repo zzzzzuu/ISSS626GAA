@@ -971,5 +971,12 @@
     "title": "Hands-on Exercise 7",
     "section": "By URA Planning Region",
     "text": "By URA Planning Region\n\ntm_shape(mpsz_svy21[mpsz_svy21$REGION_N==\"CENTRAL REGION\", ])+\n  tm_polygons()+\ntm_shape(condo_resale.sf.adaptive) + \n  tm_bubbles(col = \"Local_R2\",\n           size = 0.15,\n           border.col = \"gray60\",\n           border.lwd = 1)\n\nWarning: The shape mpsz_svy21[mpsz_svy21$REGION_N == \"CENTRAL REGION\", ] is\ninvalid. See sf::st_is_valid\n\n\n\n\n\nThat ends lesson 7."
+  },
+  {
+    "objectID": "Hands-on_Ex/Hands-on_Ex08/Hands-on_Ex08.html",
+    "href": "Hands-on_Ex/Hands-on_Ex08/Hands-on_Ex08.html",
+    "title": "Hands-on Exercise 8",
+    "section": "",
+    "text": "Predictive modelling is when we use special techniques to try to guess what will happen in the future. We usually want to predict something that hasn’t happened yet. To make good predictions, we use data from the past where we already know the result. This helps us “train” the model to be accurate.\nGeospatial predictive modelling focuses on predicting events based on location. The idea is that events don’t just happen randomly or everywhere. They usually happen in certain places because of factors like buildings, culture, or the shape of the land. Geospatial models look at past events and try to connect them to these factors. This helps to predict where similar events might happen again in the future.\nIn this exercise, we’ll learn how to create a predictive model using a method called geographical random forest. We will know how to prepare data by choosing the right samples, how to create and adjust models using both statistical and machine learning techniques, and how to compare models to pick the best one. Finally, we will be able to use the model to predict future outcomes.\n\nLoad packages\n\npacman::p_load(sf,\n               spdep,\n               GWmodel,\n               SpatialML,\n               tmap,\n               rsample,\n               Metrics,\n               tidyverse\n               )\n\n\n\nPrepare data\nWait for Prof to upload the data."
   }
 ]

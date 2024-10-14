@@ -1,0 +1,35 @@
+---
+title: "Hands-on Exercise 8"
+author: "Leow Xian Zu"
+date: "14 Oct 2024"
+date-modified: "last-modified"
+execute:
+  eval: true
+  echo: true 
+  message: false #no more warning message
+  freeze: true #whatever document already commited does not render
+---
+
+Predictive modelling is when we use special techniques to try to guess what will happen in the future. We usually want to predict something that hasn't happened yet. To make good predictions, we use data from the past where we already know the result. This helps us "train" the model to be accurate.
+
+Geospatial predictive modelling focuses on predicting events based on location. The idea is that events don't just happen randomly or everywhere. They usually happen in certain places because of factors like buildings, culture, or the shape of the land. Geospatial models look at past events and try to connect them to these factors. This helps to predict where similar events might happen again in the future.
+
+In this exercise, we'll learn how to create a predictive model using a method called geographical random forest. We will know how to prepare data by choosing the right samples, how to create and adjust models using both statistical and machine learning techniques, and how to compare models to pick the best one. Finally, we will be able to use the model to predict future outcomes.
+
+# Load packages
+
+```{r}
+pacman::p_load(sf,
+               spdep,
+               GWmodel,
+               SpatialML,
+               tmap,
+               rsample,
+               Metrics,
+               tidyverse
+               )
+```
+
+# Prepare data
+
+Wait for Prof to upload the data.
