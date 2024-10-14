@@ -9,3 +9,237 @@ execute:
   message: false #no more warning message
   freeze: true #whatever document already commited does not render
 ---
+
+# Load packages and import data
+
+```{r}
+pacman::p_load(olsrr,
+               corrplot,
+               ggstatsplot,
+               ggpubr,
+               sf,
+               sfdep,          # Note the difference between this
+               GWmodel,        # Revised this year to support sf
+               tmap,
+               tidyverse,
+               performance,
+               see
+               )
+```
+
+```{r}
+mpsz = st_read(dsn = "C:/zzzzzuu/ISSS626GAA/Hands-on_Ex/Hands-on_Ex01/data/geospatial", layer = "MP14_SUBZONE_WEB_PL")
+mpsz_svy21 <- st_transform(mpsz, 3414)
+st_crs(mpsz_svy21)
+st_bbox(mpsz_svy21) #view extent
+
+#Condo resale data
+condo_resale = read_csv("C:/zzzzzuu/ISSS626GAA/Hands-on_Ex/Hands-on_Ex07/data/aspatial/Condo_resale_2015.csv")
+
+condo_resale.sf <- st_as_sf(condo_resale,
+                            coords = c("LONGITUDE", "LATITUDE"),
+                            crs=4326) %>% #WSG84 coordinate system
+  st_transform(crs=3414)                  #then reproject into SVY21 of singapore
+```
+
+```{r, fig.width=10, fig.height=10}
+ggcorrmat(condo_resale[, 5:23])
+```
+
+# Build Hedonic Pricing Model
+
+```{r}
+condo.mlr <- lm(formula = SELLING_PRICE ~ AREA_SQM +
+                  AGE + 
+                  PROX_CBD + 
+                  PROX_CHILDCARE + 
+                  PROX_ELDERLYCARE +
+                  PROX_URA_GROWTH_AREA + 
+                  PROX_HAWKER_MARKET + 
+                  PROX_KINDERGARTEN + 
+                  PROX_MRT + 
+                  PROX_PARK + 
+                  PROX_PRIMARY_SCH +
+                  PROX_TOP_PRIMARY_SCH + 
+                  PROX_SHOPPING_MALL + 
+                  PROX_SUPERMARKET + 
+                  PROX_BUS_STOP + 
+                  NO_Of_UNITS + 
+                  FAMILY_FRIENDLY + 
+                  FREEHOLD + 
+                  LEASEHOLD_99YR,
+                data=condo_resale.sf)
+summary(condo.mlr)
+```
+
+## Model assessment: olsrr method
+
+This gives a neater report.
+
+```{r}
+ols_regress(condo.mlr)
+```
+
+## Multicollinearity
+
+Statisticians often use complex terminology to describe processes. Initially, they calibrate the model and then refer to the ANOVA reports to assess whether the null hypothesis can be rejected. This step helps in evaluating the adjusted R-squared value. After that, they analyse the parameter estimates to understand their implications.
+
+In this case, we focus on the p-value, followed by conducting diagnostics, starting with the Variance Inflation Factor (VIF). Interestingly, none of the VIF values exceeds 5, which typically suggests no serious multicollinearity issues. Despite some variables being highly correlated, their VIF values remain below 5.
+
+When interpreting the Variance Inflation Factor (VIF) in regression diagnostics, the following guidelines are generally followed:
+
+-   A VIF between **0 and 5** indicates no significant multicollinearity concerns, so there's little to worry about.
+
+-   A VIF between **5 and 10** suggests a moderate level of multicollinearity, which could cause some concern and may warrant further investigation.
+
+-   A VIF **above 10** signals a serious multicollinearity problem, indicating that the predictors are highly correlated and the model might be unreliable.
+
+Even in cases where variables are highly correlated, if their VIFs remain below 5, it's typically considered acceptable.
+
+In the regression model, variables like freehold and leasehold are binary and treated as dummy variables, representing a simple "yes" or "no" distinction. Since they are just indicators (1 for yes, 0 for no), they don't significantly impact the overall calibration of the model. Therefore, the correlation between dummy variables is generally acceptable and doesn't usually pose any major issues. So we don't need to eliminate the factors.
+
+```{r}
+ols_vif_tol(condo.mlr)
+```
+
+```{r}
+condo_fw_mlr <- ols_step_forward_p(
+  condo.mlr,
+  p_val = 0.05,
+  details = FALSE
+)
+  
+condo_fw_mlr
+```
+
+```{r}
+condo_fw_aic <- ols_step_forward_aic(
+  condo.mlr
+)
+  
+condo_fw_aic
+```
+
+```{r}
+ols_plot_resid_fit(condo_fw_mlr$model)
+```
+
+However, the plot indicates potential signs of **heteroskedasticity**. Here's why:
+
+1.  **Spread of Residuals**: In an ideal situation with no heteroskedasticity, you would expect the residuals to be evenly distributed around the red horizontal line (which represents a residual of 0), with a consistent spread across all fitted values. In this plot, however, the residuals seem more concentrated around lower fitted values and then fan out as the fitted values increase, which suggests that the variance of the residuals increases with the fitted values.
+
+2.  **Funnel Shape**: The residuals show a somewhat "fanning out" pattern as the fitted values increase. This funnel shape is often a classic sign of heteroskedasticity, where the variance of the residuals is not constant across all levels of the independent variables.
+
+```{r}
+ols_test_normality(condo_fw_mlr$model)
+```
+
+# Spatial Autocorrelation
+
+```{r}
+mlr_output <- as.data.frame(condo_fw_mlr$model$residuals) %>%
+  rename('FW_MLR_RES' = 'condo_fw_mlr$model$residuals')
+```
+
+```{r}
+condo_resale_sf <- cbind(condo_resale.sf,
+                         mlr_output$FW_MLR_RES) %>%
+  rename('MLR_RES' = 'mlr_output.FW_MLR_RES')
+```
+
+```{r}
+tmap_mode("plot")
+tm_shape(mpsz_svy21)+
+  tmap_options(check.and.fix = TRUE) +
+  tm_polygons(alpha = 0.4) +
+tm_shape(condo_resale_sf) +  
+  tm_dots(col = "MLR_RES",
+          alpha = 0.6,
+          style="quantile")
+
+tmap_mode("plot")
+```
+
+Appears to have some patterns of over/ underestimation. So it means our model may not be explaining some factors in certain geographical locations.
+
+```{r}
+condo_resale_sf <- condo_resale_sf %>%
+  mutate(nb= st_knn(geometry, k=6,
+                    longlat = FALSE),
+         wt=st_weights(nb,
+                       style = "W"),
+         
+         .before = 1)
+
+global_moran_perm(condo_resale_sf$MLR_RES,
+                  condo_resale_sf$nb,
+                  condo_resale_sf$wt,
+                  alternative = "two.sided",
+                  nsim = 99)
+```
+
+Very small p-value. Results are significant. We reject the null hypothesis that the residuals are randomly distributed.
+
+The result suggests that **nearby locations exhibit similar values** for `MLR_RES`, i.e., the values are not randomly distributed across space. Instead, there is a clustering pattern where nearby areas tend to have similar resale values or residuals.
+
+In conclusion, your analysis reveals significant positive spatial autocorrelation in your model's residuals or variables, indicating spatial patterns that should be considered when refining the model or further exploring spatial relationships.
+
+```{r}
+bw_fixed <- bw.gwr(formula = SELLING_PRICE ~ AREA_SQM + AGE +
+                     PROX_CBD + PROX_CHILDCARE +
+                     PROX_ELDERLYCARE + PROX_URA_GROWTH_AREA +
+                     PROX_MRT + PROX_PARK + PROX_PRIMARY_SCH +
+                     PROX_SHOPPING_MALL + PROX_BUS_STOP +
+                     NO_Of_UNITS + FAMILY_FRIENDLY + FREEHOLD,
+                   data=condo_resale_sf,
+                   approach="CV",
+                   kernel="gaussian",
+                   adaptive=FALSE,
+                   longlat=FALSE)
+```
+
+The algorithm begins by using a random seed value, 17660. Why this seed? It\'s simply a way to initialise the process. The algorithm starts with the **longest distance pair**---this is the easiest way to begin. From there, it iteratively calculates the **cross-validation (CV) score**. If the score improves (i.e., gets smaller), the algorithm continues, progressively reducing the **bandwidth**. This means it considers shorter and shorter distances, measured in metres, refining the process as it goes.
+
+```{r}
+gwr_fixed <- gwr.basic(formula = SELLING_PRICE ~ AREA_SQM + AGE +
+                         PROX_CBD + PROX_CHILDCARE +
+                         PROX_ELDERLYCARE + PROX_URA_GROWTH_AREA +
+                         PROX_MRT + PROX_PARK + PROX_PRIMARY_SCH +
+                         PROX_SHOPPING_MALL + PROX_BUS_STOP +
+                         NO_Of_UNITS + FAMILY_FRIENDLY + FREEHOLD,
+                       data=condo_resale_sf,
+                       bw=bw_fixed,
+                       kernel="gaussian",
+                       longlat=FALSE)
+```
+
+```{r}
+gwr_fixed
+```
+
+```{r}
+gwr_fixed_output <- as.data.frame(
+  gwr_fixed$SDF) %>%
+select(-c(2:15))
+```
+
+```{r}
+gwr_sf_fixed <- cbind(condo_resale.sf,
+                      gwr_fixed_output)
+```
+
+```{r}
+glimpse(gwr_sf_fixed)
+```
+
+```{r}
+tmap_mode("view")
+tm_shape(mpsz_svy21)+
+  tm_polygons(alpha = 0.1) +
+tm_shape(gwr_sf_fixed) +  
+  tm_dots(col = "Local_R2",
+          border.col = "gray60",
+          border.lwd = 1) +
+  tm_view(set.zoom.limits = c(11,14))
+tmap_mode("plot")
+```
