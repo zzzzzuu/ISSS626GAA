@@ -1,0 +1,14 @@
+{
+  "hash": "2a95e576962cda19c02f996e54fa3d96",
+  "result": {
+    "markdown": "---\ntitle: \"Hands-on_Ex10\"\nauthor: \"Leow Xian Zu\"\ndate: \"28 Oct 2024\"\ndate-modified: \"last-modified\"\nexecute:\n  eval: true\n  echo: true \n  message: false #no more warning message\n  freeze: true #whatever document already commited does not render\n---\n\n\nSpatial interaction describes the movement of people, goods, or information between places. This includes everything from cargo shipments and energy flows to public transport schedules and foot traffic. Each interaction is represented as an origin/destination (OD) pair, where each pair is shown in a matrix, with rows and columns representing origin and destination points. In this exercise, you'll create an OD matrix using data from the LTA DataMall on bus passenger volumes. You'll learn to import OD data, save geospatial data for bus stops, map planning zones, create geospatial desire lines, and visualise passenger volumes between bus stops.\n\n# Load\n\n\n::: {.cell}\n\n```{.r .cell-code}\npacman::p_load(tmap, sf, DT, stplanr, tidyverse)\n```\n:::\n\n\n# Prepare flow data\n\n\n::: {.cell}\n\n:::\n",
+    "supporting": [],
+    "filters": [
+      "rmarkdown/pagebreak.lua"
+    ],
+    "includes": {},
+    "engineDependencies": {},
+    "preserve": {},
+    "postProcess": true
+  }
+}

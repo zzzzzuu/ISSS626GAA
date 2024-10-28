@@ -1,0 +1,122 @@
+---
+title: "In-class Exercise 09"
+author: "Leow Xian Zu"
+date: "28 Oct 2024"
+date-modified: "last-modified"
+execute:
+  eval: true
+  echo: true 
+  message: false #no more warning message
+  freeze: true #whatever document already commited does not render
+---
+
+```{r}
+pacman::p_load(tmap,           # Creates thematic maps for visualisation
+               SpatialAcc,     # Calculates spatial accessibility metrics
+               sf,             # Manages and analyses spatial data
+               ggstatsplot,    # Enhances plots with statistical details
+               reshape2,       # Reshapes data between wide/long formats
+               tidyverse       # Data manipulation and visualisation toolkit
+               )
+```
+
+```{r}
+mpsz <- st_read(dsn = "C:/zzzzzuu/ISSS626GAA/Hands-on_Ex/Hands-on_Ex09/data/geospatial",
+                layer = "MP14_SUBZONE_NO_SEA_PL")
+hexagons <- st_read(dsn = "C:/zzzzzuu/ISSS626GAA/Hands-on_Ex/Hands-on_Ex09/data/geospatial", layer = "hexagons") 
+eldercare <- st_read(dsn = "C:/zzzzzuu/ISSS626GAA/Hands-on_Ex/Hands-on_Ex09/data/geospatial", layer = "ELDERCARE")
+mpsz <- st_transform(mpsz, 3414)
+eldercare <- st_transform(eldercare, 3414)
+hexagons <- st_transform(hexagons, 3414)
+```
+
+```{r}
+eldercare <- eldercare %>%
+  select(fid, ADDRESSPOS) %>% #only select the ID, and address coz the rest are useless)
+  mutate(capacity = 100)
+hexagons <- hexagons %>%
+  select(fid) %>%
+  mutate(demand = 100)
+```
+
+```{r}
+ODMatrix <- read_csv("C:/zzzzzuu/ISSS626GAA/Hands-on_Ex/Hands-on_Ex09/data/aspatial/OD_Matrix.csv", skip = 0)
+```
+
+```{r}
+distmat <- ODMatrix %>%
+  select(origin_id, destination_id, total_cost) %>%
+  spread(destination_id, total_cost)%>% #spread converts it into matrix
+  select(c(-c('origin_id')))
+distmat_km <- as.matrix(distmat/1000)
+
+#120 variables is each of the elderlycare
+```
+
+```{r}
+acc_Hansen <- data.frame(ac(hexagons$demand, #origin
+                            eldercare$capacity, #destination
+                            distmat_km, 
+                            #d0 = 50, #distance limit, 50km
+                            power = 2, 
+                            family = "Hansen"))
+```
+
+```{r}
+colnames(acc_Hansen) <- "accHansen"
+acc_Hansen <- tbl_df(acc_Hansen)
+hexagon_Hansen <- bind_cols(hexagons, acc_Hansen)
+acc_Hansen <- data.frame(ac(hexagons$demand,
+                            eldercare$capacity,
+                            distmat_km, 
+                            #d0 = 50,
+                            power = 0.5, 
+                            family = "Hansen"))
+
+colnames(acc_Hansen) <- "accHansen"
+acc_Hansen <- tbl_df(acc_Hansen)
+hexagon_Hansen <- bind_cols(hexagons, acc_Hansen)
+mapex <- st_bbox(hexagons)
+```
+
+```{r}
+tmap_mode("plot")
+tm_shape(hexagon_Hansen,
+         bbox = mapex) + 
+  tm_fill(col = "accHansen",
+          n = 10,
+          style = "quantile",
+          border.col = "black",
+          border.lwd = 1) +
+tm_shape(eldercare) +
+  tm_symbols(size = 0.1) +
+  tm_layout(main.title = "Accessibility to eldercare: Hansen method",
+            main.title.position = "center",
+            main.title.size = 2,
+            legend.outside = FALSE,
+            legend.height = 0.45, 
+            legend.width = 3.0,
+            legend.format = list(digits = 6),
+            legend.position = c("right", "top"),
+            frame = TRUE) +
+  tm_compass(type="8star", size = 2) +
+  tm_scale_bar(width = 0.15) +
+  tm_grid(lwd = 0.1, alpha = 0.5)
+
+```
+
+```{r}
+hexagon_Hansen <- st_join(hexagon_Hansen, mpsz, 
+                          join = st_intersects)
+```
+
+```{r}
+ggbetweenstats(
+  data = hexagon_Hansen,
+  x = REGION_N,
+  y = accHansen,
+  type = "p",
+  title = "Boxplot with Means by Region"
+)
+
+```
