@@ -226,10 +226,12 @@ head(district_names, 10)
 
 Some important notes:
 
-1.   I've transformed the CRS to UTM Zone 37S (EPSG:32737) which is more appropriate for Tanzania as it:
+1.  I've transformed the CRS to UTM Zone 37S (EPSG:32737) which is more appropriate for Tanzania as it:
 
-    -   Preserves area measurements
+```         
+-   Preserves area measurements
 
-    -   Provides more accurate distance calculations
+-   Provides more accurate distance calculations
 
-    -   Is suitable for mapping at district level
+-   Is suitable for mapping at district level
+```
