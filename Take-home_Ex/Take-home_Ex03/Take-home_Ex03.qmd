@@ -10,6 +10,10 @@ execute:
   freeze: true #whatever document already commited does not render
 ---
 
+```{r}
+pacman::p_load(sf, tidyverse, tmap, knitr, kableExtra, readr, janitor, skimr)
+```
+
 This take-home exercise examines the geography of financial inclusion through geographically weighted regression (GWR) to identify and analyse factors influencing access to financial services. Using the FinScope 2023 dataset for Tanzania, this study will focus on district-level insights, offering a spatial perspective on financial inclusion determinants. The exercise will involve geospatial data wrangling, model diagnostics, and geovisualisation, adhering to the grading criteria for data handling, analytical rigour, effective visual communication, and reproducibility in a Quarto environment. The research is grounded in existing literature on financial inclusion, specifically insights from Tanzania, where financial inclusion plays a pivotal role in economic empowerment and reducing income inequality. The goal is to provide a clear, data-driven understanding of spatial accessibility to financial services, with the results aimed at informing policies for broader economic inclusivity.
 
 The research paper on financial inclusion in Tanzania offers valuable insights into the determinants, barriers, and impacts of financial inclusion, highlighting the role of mobile banking and formal financial services in improving economic well-being. It identifies education and income as key determinants and recognises geographic constraints---such as distance to financial institutions---as significant barriers to access. This aligns closely with the objectives of the take-home exercise, which seeks to model the spatial aspects of financial inclusion at the district level. By employing geographically weighted regression (GWR), this exercise will expand upon the research findings by focusing specifically on spatial variability in financial access. The geographic emphasis in this study offers a nuanced understanding of how location influences financial inclusion, which could lead to targeted interventions to overcome geographic barriers and support underserved regions, thereby complementing the study's broader socio-economic conclusions.
@@ -45,9 +49,6 @@ Coming from Singapore's context of universal banking access and high technologic
 ## Key Comparisons with Singapore
 
 ```{r}
-library(knitr)
-library(kableExtra)
-
 comparison_df <- data.frame(
   Aspect = c("Land Area", "Population", "GDP per capita", 
              "Urbanisation", "Main Economic Sectors", "Capital City"),
@@ -138,16 +139,20 @@ Tanzania's governance structure affects service delivery:
 
 In my subsequent analysis, I'll refer back to these contextual factors to ensure my interpretation of financial inclusion patterns is grounded in Tanzania's unique circumstances rather than Singapore's standards.
 
-# Load the packages and data
+# Load the packages and examine the shapefile
 
 ```{r}
-# Load the required packages
-pacman::p_load(sf, tidyverse, tmap)
-
 # Read the shapefile
 # Replace the path with your actual file location
 tz_boundaries <- st_read(dsn = "data/geospatial/", 
                         layer = "geoBoundaries-TZA-ADM2")
+
+# Correct misspelled Butiama
+tz_boundaries <- tz_boundaries %>%
+  mutate(shapeName = case_when(
+    shapeName == "Butiam" ~ "Butiama",
+    TRUE ~ shapeName  # keeps all other names unchanged
+  ))
 
 # Check the CRS (Coordinate Reference System)
 st_crs(tz_boundaries)
@@ -161,12 +166,6 @@ tm_shape(tz_boundaries) +
 ```
 
 ```{r}
-# Load required packages if not already loaded
-pacman::p_load(sf, tidyverse, tmap)
-
-# Read the shapefile and explore its contents
-tz_boundaries <- st_read("data/geospatial/geoBoundaries-TZA-ADM2.shp")
-
 # Examine the structure and attributes
 glimpse(tz_boundaries)
 
@@ -177,8 +176,11 @@ names(tz_boundaries)
 summary(tz_boundaries)
 
 # Create an initial visualization with district names
+tmap_mode("view")
 tm_shape(tz_boundaries) +
-  tm_borders() +
+  tm_polygons(id = "shapeName",  # replace "shapeName" with your actual column name for district names
+              alpha = 0,         # make fill transparent
+              border.col = "black") +
   tm_layout(main.title = "Tanzania Districts",
             main.title.size = 1)
 
@@ -234,4 +236,138 @@ Some important notes:
 -   Provides more accurate distance calculations
 
 -   Is suitable for mapping at district level
+```
+
+# Load the Financial Inclusion Survey results
+
+```{r}
+findata <- read_csv("data/aspatial/FinScope Tanzania 2023_Individual Main Data_FINAL.csv")
+findata <- findata %>%
+  mutate(reg_name = case_when(
+    reg_name == "Kigamboni" ~ "Temeke",
+    TRUE ~ reg_name  # keeps all other names unchanged
+  ))
+```
+
+```{r}
+# Check for district name misspellings
+# Load required packages
+library(tidyverse)
+library(stringdist)
+library(sf)
+
+# Function to find best match for district names
+find_best_match <- function(survey_name, shapefile_names) {
+  # Calculate string distances using various methods
+  distances <- stringdist(tolower(survey_name), 
+                         tolower(shapefile_names),
+                         method = "jw")  # Jaro-Winkler distance
+  
+  # Find the best match (smallest distance)
+  best_match <- shapefile_names[which.min(distances)]
+  
+  # Calculate the similarity score (1 - normalized distance)
+  best_score <- 1 - min(distances)
+  
+  # Only return match if similarity is high enough
+  if (best_score >= 0.83) {
+    return(best_match)
+  } else {
+    return(NA_character_)
+  }
+}
+
+# Create matching dictionary
+create_district_dictionary <- function(survey_districts, shapefile_districts) {
+  # Create mapping dataframe
+  mapping <- data.frame(
+    survey_name = unique(survey_districts),
+    stringsAsFactors = FALSE
+  ) %>%
+    mutate(
+      # Find best match for each survey district name
+      shapefile_name = sapply(survey_name, 
+                             find_best_match, 
+                             shapefile_districts),
+      # Calculate similarity score
+      match_score = sapply(survey_name, function(x) {
+        distances <- stringdist(tolower(x), 
+                              tolower(shapefile_districts),
+                              method = "jw")
+        1 - min(distances)
+      })
+    )
+  
+  # Sort by match score to easily review matches
+  mapping <- mapping %>%
+    arrange(desc(match_score))
+  
+  return(mapping)
+}
+
+
+
+# Apply the matching
+# Assuming 'findata' is your survey data and 'tanzania_districts' is your shapefile
+mapping <- create_district_dictionary(
+  unique(findata$dist_name),
+  unique(tz_boundaries$shapeName)  # adjust column name as needed
+)
+
+# Review the matches
+# Print matches with low confidence for manual review
+low_confidence <- mapping %>%
+  filter(match_score < 0.83) %>%
+  arrange(match_score)
+
+print("Low confidence matches that might need manual review:")
+print(low_confidence)
+
+# Create a function to apply the mapping
+standardize_district_names <- function(data, mapping) {
+  data %>%
+    left_join(mapping %>% 
+                select(survey_name, shapefile_name),
+              by = c("dist_name" = "survey_name")) %>%
+    mutate(dist_name_std = coalesce(shapefile_name, dist_name)) %>%
+    select(-shapefile_name)
+}
+
+# Apply standardization to your survey data
+findata_standardized <- standardize_district_names(findata, mapping)
+
+# Verify the matching worked
+verification <- findata_standardized %>%
+  group_by(dist_name, dist_name_std) %>%
+  summarise(count = n(), .groups = "drop") %>%
+  arrange(dist_name)
+
+# Print summary of changes
+cat("\nNumber of districts matched:", sum(!is.na(mapping$shapefile_name)))
+cat("\nNumber of districts unmatched:", sum(is.na(mapping$shapefile_name)))
+
+# Save the mapping for documentation
+write_csv(mapping, "data/derived/district_name_mapping.csv")
+
+# Display some example matches
+cat("\nExample matches (original -> standardized):\n")
+head(mapping %>% filter(!is.na(shapefile_name)), 10) %>%
+  mutate(mapping = paste(survey_name, "->", shapefile_name)) %>%
+  pull(mapping) %>%
+  cat(sep = "\n")
+```
+
+```{r}
+responses_w_uninterpretable_district <- findata %>%
+  filter(dist_name %in% c("Tanga", "Tanganyika", "Malinyi", 
+                         "Arumeru", "Kibiti", "Ubungo")) %>%
+  group_by(dist_name) %>%
+  summarise(
+    response_count = n(),
+    percent_of_total = (n() / nrow(findata) * 100),
+    .groups = 'drop'
+  ) %>%
+  arrange(desc(response_count))
+
+# Safe to drop them
 ```
