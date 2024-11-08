@@ -11,7 +11,20 @@ execute:
 ---
 
 ```{r}
-pacman::p_load(sf, tidyverse, tmap, knitr, kableExtra, readr, janitor, skimr)
+pacman::p_load(
+  sf,          # For handling spatial data and geometries
+  tidyverse,   # Collection of packages for data manipulation and visualization
+  tmap,        # For creating thematic maps and spatial visualizations
+  knitr,       # For dynamic report generation and R markdown documents
+  kableExtra,  # For creating nice-looking tables in R markdown
+  janitor,     # For cleaning and examining data
+  skimr,       # For providing summary statistics about variables in data frames
+  stringdist,  # For string similarity
+  ggstatsplot, # For EDA
+  spdep,       # For spatial autocorrelation
+  GWmodel,     # For for regression
+  corrplot     # For for correlation analysis
+)
 ```
 
 This take-home exercise examines the geography of financial inclusion through geographically weighted regression (GWR) to identify and analyse factors influencing access to financial services. Using the FinScope 2023 dataset for Tanzania, this study will focus on district-level insights, offering a spatial perspective on financial inclusion determinants. The exercise will involve geospatial data wrangling, model diagnostics, and geovisualisation, adhering to the grading criteria for data handling, analytical rigour, effective visual communication, and reproducibility in a Quarto environment. The research is grounded in existing literature on financial inclusion, specifically insights from Tanzania, where financial inclusion plays a pivotal role in economic empowerment and reducing income inequality. The goal is to provide a clear, data-driven understanding of spatial accessibility to financial services, with the results aimed at informing policies for broader economic inclusivity.
@@ -65,6 +78,8 @@ kable(comparison_df,
                 full_width = FALSE) %>%
   column_spec(1, bold = TRUE) %>%
   column_spec(2:3, width = "20em")
+
+rm(comparison_df) # Keep environment clean
 ```
 
 ## Geographical Diversity
@@ -143,11 +158,10 @@ In my subsequent analysis, I'll refer back to these contextual factors to ensure
 
 ```{r}
 # Read the shapefile
-# Replace the path with your actual file location
 tz_boundaries <- st_read(dsn = "data/geospatial/", 
                         layer = "geoBoundaries-TZA-ADM2")
 
-# Correct misspelled Butiama
+# Correct misspelled Butiama which was discovered below
 tz_boundaries <- tz_boundaries %>%
   mutate(shapeName = case_when(
     shapeName == "Butiam" ~ "Butiama",
@@ -160,40 +174,67 @@ st_crs(tz_boundaries)
 # Take a quick look at the data
 glimpse(tz_boundaries)
 
+tmap_mode("plot")
 # Create a quick plot to verify the import
 tm_shape(tz_boundaries) +
   tm_borders()
+
+sort(unique(tz_boundaries$shapeName))
 ```
+
+The map appears accurate; however, there are urban splits which are not useful.
 
 ```{r}
-# Examine the structure and attributes
-glimpse(tz_boundaries)
+# First, create a function to clean urban district names
+clean_urban_names <- function(name) {
+  # Convert to lowercase for easier matching
+  name <- tolower(name)
+  
+  # Remove common urban suffixes and clean up
+  name <- gsub(" urban$| township authority$| mji$", "", name)
+  
+  # Clean up specific cases
+  name <- gsub("babati urbanbabati", "babati", name)
+  name <- gsub("korogwe township authority", "korogwe", name)
+  name <- gsub("kigoma  urban", "kigoma", name)
+  name <- gsub("masasi  township authority", "masasi", name)
+  
+  # Capitalize first letter of each word
+  name <- tools::toTitleCase(name)
+  name <- trimws(gsub("\\s+", " ", name))
+  return(name)
+}
 
-# View column names
-names(tz_boundaries)
+# Apply the transformation and merge polygons
+# Assuming your spatial data frame is called 'spatialdata'
+tz_boundaries_merged <- tz_boundaries %>%
+  # Clean the district names
+  mutate(shapeName = clean_urban_names(shapeName)) %>%
+  # Group by the cleaned district names
+  group_by(shapeName) %>%
+  # Merge the geometries
+  summarise(
+    geometry = st_union(geometry),
+    .groups = "drop"
+  ) %>%
+  # Fix any invalid geometries after merging
+  st_make_valid() %>%
+  # Apply a zero buffer to fix any remaining issues
+  st_buffer(0) %>%
+  # Final validation check
+  st_make_valid()
 
-# Get a summary of the data
-summary(tz_boundaries)
+rm(clean_urban_names)
 
-# Create an initial visualization with district names
-tmap_mode("view")
-tm_shape(tz_boundaries) +
-  tm_polygons(id = "shapeName",  # replace "shapeName" with your actual column name for district names
-              alpha = 0,         # make fill transparent
-              border.col = "black") +
-  tm_layout(main.title = "Tanzania Districts",
-            main.title.size = 1)
-
-# Check the number of districts
-cat("Number of districts:", nrow(tz_boundaries))
 ```
+
+the presence of numerous islands may influence the positioning of the centroid. This tells me to give careful consideration to ensure precise placement.
 
 ```{r}
 # Clean and transform the spatial data
-tz_districts <- tz_boundaries %>%
+tz_districts <- tz_boundaries_merged %>%
   # Keep only necessary columns
   select(district_name = shapeName,
-         district_id = shapeID,
          geometry) %>%
   # Convert to more appropriate projection for Tanzania
   st_transform(crs = 32737) %>%  # UTM Zone 37S
@@ -211,19 +252,45 @@ tm_shape(tz_districts) +
   tm_compass(position = c("right", "top")) +
   tm_scale_bar(position = c("left", "bottom"))
 
-# Save the cleaned spatial data
-st_write(tz_districts, 
-         "data/cleaned/tz_districts.shp", 
-         append = FALSE)
+#Remove smaller islands in the multipolygons to improve centroid placement
+tz_districts_polygon <- tz_districts %>%
+  st_cast("POLYGON") %>%
+  mutate(area = st_area(.))
+tz_districts_polygon_main <- tz_districts_polygon %>%
+  group_by(district_name) %>%
+  filter(area ==max(area)) %>%
+  ungroup() %>%
+  dplyr::select(-area) %>%
+  dplyr::select(district_name)
 
-# Create a data frame of district names for reference
-district_names <- tz_districts %>%
-  st_drop_geometry() %>%
-  select(district_name) %>%
-  arrange(district_name)
+# Calculate centroids
+tz_centroids_main <- st_centroid(tz_districts_polygon_main)
+tz_centroids <- st_centroid(tz_districts)
 
-# View first few district names
-head(district_names, 10)
+# Create the map for tz_districts_polygon_main with centroids overlay
+tmap_mode("view")
+map1 <- tm_shape(tz_districts_polygon_main) +
+  tm_polygons() +
+  tm_shape(tz_centroids_main) +
+  tm_dots(size = 0.1, col = "red") +
+  tm_layout(title = "TZ Districts Polygon Main with Centroids")
+
+# Create the map for tz_districts with centroids overlay
+map2 <- tm_shape(tz_districts) +
+  tm_borders() +
+  tm_shape(tz_centroids) +
+  tm_dots(size = 0.1, col = "blue") +
+  tm_layout(title = "TZ Districts with Centroids")
+
+# Arrange the maps side by side
+tmap_arrange(map1, map2)
+
+rm(tz_boundaries,
+   tz_boundaries_merged,
+   tz_districts,
+   tz_centroids,
+   tz_districts_polygon
+   ) # Keep environment clean
 ```
 
 Some important notes:
@@ -238,23 +305,102 @@ Some important notes:
 -   Is suitable for mapping at district level
 ```
 
+2.  The centroids for Uvinza is off-centre. I will manually shift the centroid.
+
+```{r}
+latitude_shift <- 40000   # This was manually tested and shifted
+longitude_shift <- -35000
+
+# Get coordinates of Uvinza's centroid
+uvinza_coords <- st_coordinates(tz_centroids_main$geometry[tz_centroids_main$district_name == "Uvinza"])
+
+# Create new point with shifted coordinates
+new_uvinza_point <- st_point(c(
+  uvinza_coords[1] + longitude_shift,
+  uvinza_coords[2] + latitude_shift
+))
+
+# Create new geometry collection
+new_geometries <- tz_centroids_main$geometry
+new_geometries[tz_centroids_main$district_name == "Uvinza"] <- st_sfc(new_uvinza_point, crs = st_crs(tz_centroids_main))
+
+# Create new centroids object with shifted Uvinza point
+tz_centroids_shifted <- tz_centroids_main
+tz_centroids_shifted$geometry <- new_geometries
+
+# Verify the shift
+tmap_mode("view")      # Change from "view" to "plot" to save on computing
+tm_shape(tz_districts_polygon_main) +
+  tm_polygons() +
+  tm_shape(tz_centroids_shifted) +
+  tm_dots(size = 0.1, col = "red") +
+  tm_layout(title = "TZ Districts with Shifted Uvinza Centroid")
+```
+
+```{r}
+latitude_shift <- 20000   # This was manually tested and shifted
+longitude_shift <- -25000
+
+# Get coordinates of Kilombero's centroid
+kilombero_coords <- st_coordinates(tz_centroids_shifted$geometry[tz_centroids_shifted$district_name == "Kilombero"])
+
+# Create new point with shifted coordinates
+new_kilombero_point <- st_point(c(
+  kilombero_coords[1] + longitude_shift,
+  kilombero_coords[2] + latitude_shift
+))
+
+# Create new geometry collection
+new_geometries2 <- tz_centroids_shifted$geometry
+new_geometries2[tz_centroids_shifted$district_name == "Kilombero"] <- st_sfc(new_kilombero_point, crs = st_crs(tz_centroids_shifted))
+
+# Create new centroids object with shifted kilombero point
+tz_centroids_shifted2 <- tz_centroids_shifted
+tz_centroids_shifted2$geometry <- new_geometries2
+
+# Verify the shift
+tmap_mode("view")      # Change from "view" to "plot" to save on computing
+tm_shape(tz_districts_polygon_main) +
+  tm_polygons() +
+  tm_shape(tz_centroids_shifted2) +
+  tm_dots(size = 0.1, col = "red") +
+  tm_layout(title = "TZ Districts with Shifted Kilombero Centroid")
+
+rm(tz_centroids_shifted)
+```
+
+The shift in the centroid for Uvinza and Kilombero is now correct based on human evaluation. Changing "view" to "plot" to save on computing power.
+
+```{r}
+rm(latitude_shift,
+   longitude_shift,
+   uvinza_coords,
+   kilombero_coords,
+   new_uvinza_point,
+   new_kilombero_point,
+   new_geometries,
+   new_geometries2,
+   tz_centroids_main
+   ) # Keep environment clean
+```
+
 # Load the Financial Inclusion Survey results
 
 ```{r}
 findata <- read_csv("data/aspatial/FinScope Tanzania 2023_Individual Main Data_FINAL.csv")
 findata <- findata %>%
-  mutate(reg_name = case_when(
-    reg_name == "Kigamboni" ~ "Temeke",
-    TRUE ~ reg_name  # keeps all other names unchanged
+  mutate(dist_name = case_when(
+    dist_name == "Kigamboni" ~ "Temeke",
+    dist_name == "Arumeru" ~ "Meru",
+    dist_name == "Ubungo" ~ "Kinondoni",
+    dist_name == "Kibiti" ~ "Rufiji",
+    dist_name == "Malinyi" ~ "Ulanga",# This change was made due to examination of district names for matching below.
+    TRUE ~ dist_name  # keeps all other names unchanged
   ))
 ```
 
 ```{r}
 # Check for district name misspellings
-# Load required packages
-library(tidyverse)
-library(stringdist)
-library(sf)
 
 # Function to find best match for district names
 find_best_match <- function(survey_name, shapefile_names) {
@@ -308,10 +454,9 @@ create_district_dictionary <- function(survey_districts, shapefile_districts) {
 
 
 # Apply the matching
-# Assuming 'findata' is your survey data and 'tanzania_districts' is your shapefile
 mapping <- create_district_dictionary(
   unique(findata$dist_name),
-  unique(tz_boundaries$shapeName)  # adjust column name as needed
+  unique(tz_districts_polygon_main$district_name)  # adjust column name as needed
 )
 
 # Review the matches
@@ -346,28 +491,671 @@ verification <- findata_standardized %>%
 cat("\nNumber of districts matched:", sum(!is.na(mapping$shapefile_name)))
 cat("\nNumber of districts unmatched:", sum(is.na(mapping$shapefile_name)))
 
-# Save the mapping for documentation
-write_csv(mapping, "data/derived/district_name_mapping.csv")
-
 # Display some example matches
 cat("\nExample matches (original -> standardized):\n")
 head(mapping %>% filter(!is.na(shapefile_name)), 10) %>%
   mutate(mapping = paste(survey_name, "->", shapefile_name)) %>%
   pull(mapping) %>%
   cat(sep = "\n")
+
+rm(low_confidence,
+   mapping,
+   verification,
+   create_district_dictionary,
+   find_best_match,
+   standardize_district_names
+   ) # Keep environment clean
+
+```
+
+# Pick the columns to use for regression
+
+```{r}
+# Select specified columns from the findata dataset
+findata_selected <- findata_standardized %>%
+ select(
+   # Location and cluster information
+   dist_name,          # District name
+   clustertype,        # Cluster type
+   
+   # Demographic variables
+   c8c,                # Age
+   c9,                 # Gender
+   c11,                # Education status
+   c14,                # Agricultural activity involvement
+   
+   # Weights
+   Household_weight,   # Household level weight
+   population_wt,      # Population weight
+   
+   # Derived financial inclusion indicators
+   MM,                 # Mobile money usage
+   BANKED,             # Banking services usage
+   MFI,                # Microfinance institution usage
+   PENSION,            # Pension services usage
+   INSURANCE,          # Insurance services usage
+   SACCO,              # SACCO membership/usage
+   CAPITALM_FUND_MANAGERS,  # Capital market/fund manager usage
+   FORM_INVESTMENTS,        # Formal investments
+   CMG,                     # Community microfinance group membership
+   INFORMAL_MONEYLENDER,    # Informal moneylender usage
+   SOCIAL_GROUPS            # Social group membership
+ ) %>%
+ # Clean column names for consistency
+ clean_names()
+
+# Check the structure of selected data
+glimpse(findata_selected)
+summary(findata_selected)
+
+# Get summary statistics of the selected variables
+skim(findata_selected)
+
+rm(findata,
+   findata_standardized
+   ) # Keep environment clean
+```
+
+# Exploratory Data Analysis
+
+```{r}
+# Summary
+summary(findata_selected)
+
+# Create a series of visualizations
+lapply(c("c9", "c11", "clustertype", "c14", 
+         "mm", "banked", "mfi", "pension", 
+         "insurance", "sacco","capitalm_fund_managers",
+         "form_investments","cmg",
+         "informal_moneylender","social_groups"), function(var) {
+  ggplot(findata_selected, aes_string(x = var)) +
+    geom_bar() +
+    theme_minimal() +
+    labs(title = paste("Distribution of", var),
+         x = var,
+         y = "Count") +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+})
+
+```
+
+Looking at the character charts, we need to aggregate them into a variable by district level. The only non-binary variable is education. I'll need to give it a education score.
+
+```{r}
+# Create education score mapping
+education_scores <- c(
+  "Don’t know" = 0,
+  "No formal education" = 1,
+  "Post primary technical training" = 4,  # After primary but before secondary
+  "Primary completed" = 3,
+  "Secondary competed-O level" = 5,
+  "Secondary completed-A level" = 6,
+  "Some primary" = 2,
+  "Some secondary" = 4,
+  "Some University or other higher education" = 6,
+  "University or other higher education" = 7,
+  "University or higher education completed" = 8
+)
+
+# Apply scores to your data
+findata_selected_ed <- findata_selected %>%
+  mutate(education_score = education_scores[c11])
+
+rm(education_scores, findata_selected)
+```
+
+# Group and aggregate the survey data to form district-level data
+
+```{r}
+district_summary <- findata_selected_ed %>%
+ group_by(dist_name) %>%
+ summarise(
+   # Urbanity - count and percentage of urban areas
+   urban_count = sum(clustertype == "Urban", na.rm = TRUE),
+   urban_pct = mean(clustertype == "Urban", na.rm = TRUE) * 100,
+   
+   # Demographics
+   median_age = median(as.numeric(c8c), na.rm = TRUE),
+   average_ed = mean(as.numeric(education_score), na.rm = TRUE),
+   male_count = sum(c9 == "Male", na.rm = TRUE),
+   male_pct = mean(c9 == "Male", na.rm = TRUE) * 100,
+   agriculture_count = sum(c14 == "Yes", na.rm = TRUE),
+   agriculture_pct = mean(c14 == "Yes", na.rm = TRUE) * 100,
+   
+   # Financial services counts and percentages
+   mobile_money_count = sum(mm == "MM", na.rm = TRUE),
+   mobile_money_pct = mean(mm == "MM", na.rm = TRUE) * 100,
+   
+   bank_count = sum(banked == "Banked", na.rm = TRUE),
+   bank_pct = mean(banked == "Banked", na.rm = TRUE) * 100,
+   
+   mfi_count = sum(mfi == "MFI", na.rm = TRUE),
+   mfi_pct = mean(mfi == "MFI", na.rm = TRUE) * 100,
+   
+   pension_count = sum(pension == "PENSION", na.rm = TRUE),
+   pension_pct = mean(pension == "PENSION", na.rm = TRUE) * 100,
+   
+   insurance_count = sum(insurance == "INSURANCE", na.rm = TRUE),
+   insurance_pct = mean(insurance == "INSURANCE", na.rm = TRUE) * 100,
+   
+   sacco_count = sum(sacco == "SACCO", na.rm = TRUE),
+   sacco_pct = mean(sacco == "SACCO", na.rm = TRUE) * 100,
+   
+   capital_count = sum(capitalm_fund_managers == "CAPITALM_FUND_MANAGERS", na.rm = TRUE),
+   capital_pct = mean(capitalm_fund_managers == "CAPITALM_FUND_MANAGERS", na.rm = TRUE) * 100,
+   
+   invest_count = sum(form_investments == "FORM_INVESTMENTS", na.rm = TRUE),
+   invest_pct = mean(form_investments == "FORM_INVESTMENTS", na.rm = TRUE) * 100,
+
+   cmg_count = sum(cmg == "CMG", na.rm = TRUE),
+   cmg_pct = mean(cmg == "CMG", na.rm = TRUE) * 100,  
+   
+   moneylender_count = sum(informal_moneylender == "INFORMAL_MONEYLENDER", na.rm = TRUE),
+   moneylender_pct = mean(informal_moneylender == "INFORMAL_MONEYLENDER", na.rm = TRUE) * 100,
+   
+   social_count = sum(social_groups == "SOCIAL_GROUPS", na.rm = TRUE),
+   social_pct = mean(social_groups == "SOCIAL_GROUPS", na.rm = TRUE) * 100,  
+   
+   
+   # Total responses per district
+   total_respondents = n()
+ ) %>%
+ # Round all percentage columns to 2 decimal places
+ mutate(across(ends_with("_pct"), ~round(., 2)))
+
+# View the first few rows
+head(district_summary)
+
+# Check for any districts with suspicious values
+summary(district_summary)
+```
+
+# Join aspatial data with geospatial data
+
+```{r}
+# Join the spatial data
+district_summary_spatial <- tz_districts_polygon_main %>%
+ left_join(district_summary, 
+           by = c("district_name" = "dist_name")) %>%
+ st_as_sf()  # ensure it remains as spatial object
+
+# Join centroids
+district_summary_spatial <- district_summary_spatial %>%
+ left_join(
+   tz_centroids_shifted2 %>% 
+     st_set_geometry(NULL) %>%  # remove geometry before joining
+     select(district_name, everything()),
+   by = c("district_name" = "district_name")
+ )
+
+# Check the join results
+print(paste("Number of districts in summary:", nrow(district_summary)))
+print(paste("Number of districts after spatial join:", nrow(district_summary_spatial)))
+print(paste("Number of districts with centroids:", sum(!is.na(district_summary_spatial$geometry))))
+
+# Check for any districts that didn't match
+missing_districts <- district_summary_spatial %>%
+ filter(is.na(total_respondents)) %>%
+ pull(district_name)
+
+if(length(missing_districts) > 0) {
+ print("Districts without survey data:")
+ print(missing_districts)
+}
+
+district_summary_spatial <- district_summary_spatial %>%
+  drop_na(mobile_money_count)
+```
+
+# EDA to examine data
+
+```{r}
+summary(district_summary_spatial)
+
+# Create histograms and boxplots for the main variables
+plot_hist_box <- function(data, var, title) {
+  # Create histogram
+  p1 <- ggplot(data, aes(x = .data[[var]])) +
+    geom_histogram(fill = "skyblue", color = "black", alpha = 0.7) +
+    theme_minimal() +
+    labs(title = paste("Histogram of", title),
+         x = title,
+         y = "Count")
+  
+  # Create boxplot
+  p2 <- ggplot(data, aes(y = .data[[var]])) +
+    geom_boxplot(fill = "skyblue", alpha = 0.7) +
+    theme_minimal() +
+    labs(title = paste("Boxplot of", title),
+         y = title)
+  
+  # Arrange plots side by side
+  gridExtra::grid.arrange(p1, p2, ncol = 2)
+}
+
+# Create plots for key variables
+variables_to_plot <- list(
+  c("urban_pct", "Urban Population %"),
+  c("median_age", "Median Age"),
+  c("average_ed", "Average Education Level"),
+  c("male_pct", "Male Population %"),
+  c("agriculture_pct", "Agricultural Employment %"),
+  c("mobile_money_pct", "Mobile Money Usage %"),
+  c("bank_pct", "Bank Account Usage %"),
+  c("mfi_pct", "Microfinance Institution Usage %"),
+  c("pension_pct", "Pension Scheme Usage %"),
+  c("insurance_pct", "Insurance Service Usage %"),
+  c("sacco_pct", "Savings & Credit Co-op Usage %"),
+  c("cmg_pct", "Credit Management Group Usage %"),
+  c("capital_pct", "Capital Market Fund Usage %"),
+  c("invest_pct", "Formal Investment Usage %"),
+  c("moneylender_pct", "Informal Moneylender Usage %")
+)
+
+# Generate all plots
+for(var in variables_to_plot) {
+  plot_hist_box(district_summary_spatial, var[1], var[2])
+}
+
+# Create correlation plot for financial inclusion indicators
+financial_vars <- c("mobile_money_pct", "bank_pct", "mfi_pct", 
+                   "pension_pct", "insurance_pct", "sacco_pct",
+                   "cmg_pct","capital_pct","invest_pct","moneylender_pct")
+
+correlation_data <- district_summary_spatial %>%
+  st_drop_geometry() %>%
+  select(all_of(financial_vars))
+
+# Create correlation plot
+corrplot::corrplot(cor(correlation_data, use = "complete.obs"),
+                  method = "color",
+                  type = "upper",
+                  addCoef.col = "black",
+                  tl.col = "black",
+                  tl.srt = 45,
+                  diag = FALSE)
+
+```
+
+This correlation heatmap provides insights into the relationships between mobile money usage percentage (`mobile_money_pct`) and various financial service usage metrics across Tanzania. Focusing on `mobile_money_pct`, I observed that it has the strongest positive correlations with `bank_pct` (0.61) and `mfi_pct` (0.60), suggesting that higher usage of banking and microfinance services is associated with greater adoption of mobile money services. This could imply that regions with more formal financial services may also be more inclined to adopt mobile money, possibly due to higher financial literacy or a stronger financial infrastructure.
+
+Other variables, such as `pension_pct` and `insurance_pct`, show moderate positive correlations with `mobile_money_pct` (0.40 and 0.25, respectively). This indicates a lesser, yet still positive, association with mobile money usage. Meanwhile, `sacco_pct`, `cmg_pct`, and `moneylender_pct` show weak positive correlations with mobile money usage, while `invest_pct` has a very weak negative correlation (-0.09), suggesting minimal or mixed associations.
+
+Another interesting observation is the near-perfect correlation between `pension_pct` and `invest_pct` (0.98), indicating that these two variables may be closely linked or overlapping in certain areas; I will drop `invest_pct`. Overall, this correlation matrix suggests that formal financial service usage, particularly bank and microfinance services, has the most substantial positive association with mobile money adoption across Tanzania. This information could be useful for targeting strategies aimed at increasing mobile money usage, especially in regions with already established banking or microfinance services.
+
+# Regression
+
+```{r}
+# Build the adaptive bandwidth GWR model
+bw.adaptive <- bw.gwr(formula = mobile_money_count ~
+                        urban_pct +
+                        median_age +
+                        average_ed +
+                        male_pct +
+                        agriculture_pct +
+                        bank_pct +
+                        mfi_pct +
+                        pension_pct +
+                        sacco_pct +
+                        insurance_pct +
+                        cmg_pct +
+                        moneylender_pct,
+                      data = district_summary_spatial,
+                      approach = "CV",
+                      kernel = "gaussian",
+                      adaptive = TRUE,
+                      longlat = FALSE)
+
+# Fit the GWR model using the optimal bandwidth
+gwr.model <- gwr.basic(formula = mobile_money_count ~
+                        urban_pct +
+                        median_age +
+                        average_ed +
+                        male_pct +
+                        agriculture_pct +
+                        bank_pct +
+                        mfi_pct +
+                        pension_pct +
+                        sacco_pct +
+                        insurance_pct +
+                        cmg_pct +
+                        invest_pct +
+                        moneylender_pct,
+                       data = district_summary_spatial,
+                       bw = bw.adaptive,
+                       kernel = "gaussian",
+                       adaptive = TRUE,
+                       longlat = FALSE)
+
+# Print model diagnostics
+gwr.model
+
+# Extract local R2 values
+local_r2 <- gwr.model$SDF$Local_R2
+
+# Extract coefficient estimates
+coef_estimates <- as.data.frame(gwr.model$SDF)
+
+# Create summary statistics for local coefficients
+coef_summary <- data.frame(
+  Variable = names(coef_estimates)[1:4],  # Includes intercept
+  Mean = colMeans(coef_estimates[,1:4]),
+  Min = apply(coef_estimates[,1:4], 2, min),
+  Max = apply(coef_estimates[,1:4], 2, max),
+  SD = apply(coef_estimates[,1:4], 2, sd)
+)
+
+print(coef_summary)
 ```
 
 ```{r}
-responses_w_uninterpretable_district <- findata %>%
-  filter(dist_name %in% c("Tanga", "Tanganyika", "Malinyi", 
-                         "Arumeru", "Kibiti", "Ubungo")) %>%
-  group_by(dist_name) %>%
-  summarise(
-    response_count = n(),
-    percent_of_total = (n() / nrow(findata) * 100),
-    .groups = 'drop'
-  ) %>%
-  arrange(desc(response_count))
-
-# Safe to drop them
+summary(gwr.model$SDF$yhat)
 ```
+
+```{r}
+# First, let's properly prepare the data
+# Convert GWR results to appropriate format
+gwr_results <- as.data.frame(gwr.model$SDF)
+
+# Ensure the spatial data is properly formatted
+district_gwr.sf.combined <- district_summary_spatial %>%
+  cbind(Local_R2 = gwr_results$Local_R2) %>%
+  st_as_sf()
+
+# Check the structure
+str(district_gwr.sf.combined$Local_R2)
+
+tmap_mode("plot")
+# Create the map
+tm_shape(district_gwr.sf.combined) +
+  tm_fill(col = "Local_R2", 
+          style = "pretty",
+          palette = "viridis",
+          title = "Local R-squared Values") +
+  tm_borders(alpha = 0.5) +
+  tm_layout(main.title = "GWR Model Performance by District",
+            main.title.size = 1,
+            frame = FALSE) +
+  tm_compass(type = "arrow", position = c("right", "top")) +
+  tm_scale_bar(position = c("left", "bottom"))
+
+# Create summary statistics of Local R2 values
+summary_stats <- summary(district_gwr.sf.combined$Local_R2)
+print(summary_stats)
+```
+
+In examining the Geographically Weighted Regression (GWR) model performance across districts in Tanzania, I observed that the model's effectiveness varies significantly by region. The map uses local R-squared values, ranging from 0.530 to 0.565, to indicate how well the model explains the variability in mobile money usage within each district. Higher R-squared values, seen in the southern and south-eastern regions (in green and yellow), suggest a better model fit, meaning the model explains more of the variance in these areas. In contrast, the northern regions (in dark blue/purple) show lower R-squared values, indicating that the model doesn't perform as well there. This variation in R-squared values across Tanzania suggests that some of the predictors I'm using, such as education or urbanisation, may be more relevant in certain areas but less effective in others. It could also mean that there are other local factors influencing mobile money adoption in the northern regions that the current model doesn't capture.
+
+# Analysis of the regression results
+
+```{r}
+# Create list of all variables we can analyze
+gwr_variables <- c(
+  "urban_pct" = "Urban Population %",
+  "median_age" = "Median Age",
+  "average_ed" = "Average Education Level",
+  "male_pct" = "Male Population %",
+  "agriculture_pct" = "Agricultural Employment %",
+  "bank_pct" = "Bank Usage %",
+  "mfi_pct" = "Microfinance Institution Usage %",
+  "pension_pct" = "Pension Usage %",
+  "insurance_pct" = "Insurance Usage %",
+  "sacco_pct" = "SACCO Usage %",
+  "cmg_pct" = "Credit Management Group Usage %",
+  "invest_pct" = "Formal Investment Usage %",
+  "moneylender_pct" = "Informal Moneylender Usage %"
+)
+
+plot_gwr_stats <- function(variable_name, model = gwr.model, spatial_data = district_summary_spatial) {
+  # Extract variable statistics
+  stats <- data.frame(
+    district_name = spatial_data$district_name,
+    coefficient = as.numeric(unlist(model$SDF[[paste0(variable_name)]])),
+    t_value = as.numeric(unlist(model$SDF[[paste0(variable_name, "_TV")]])),
+    se_value = as.numeric(unlist(model$SDF[[paste0(variable_name, "_SE")]])))
+  
+  # Calculate p-values
+  stats$p_value <- 2 * pt(abs(stats$t_value), 
+                         df = 121,
+                         lower.tail = FALSE)
+  
+  # Join with spatial data
+  analysis_sf <- spatial_data %>%
+    left_join(stats, by = "district_name") %>%
+    st_as_sf()
+  
+  # Set tmap mode to plot
+  tmap_mode("plot")
+  
+  # Create coefficient map
+  coef_map <- tm_shape(analysis_sf) +
+    tm_fill(col = "coefficient",
+            style = "quantile",
+            n = 5,
+            palette = "RdBu",
+            midpoint = 0,
+            title = "Coefficient Values") +
+    tm_borders(alpha = 0.5) +
+    tm_layout(main.title = paste(gwr_variables[variable_name], "\nCoefficients"),
+              main.title.size = 0.8,
+              legend.title.size = 0.7,
+              legend.text.size = 0.6,
+              frame = FALSE)
+  
+  # Create p-value map
+  p_map <- tm_shape(analysis_sf) +
+    tm_fill(col = "p_value",
+            style = "fixed",
+            breaks = c(0, 0.01, 0.05, 0.1, 1),
+            palette = "viridis",
+            title = "P-values") +
+    tm_borders(alpha = 0.5) +
+    tm_layout(main.title = paste(gwr_variables[variable_name], "\nP-values"),
+              main.title.size = 0.8,
+              legend.title.size = 0.7,
+              legend.text.size = 0.6,
+              frame = FALSE)
+  
+  # Arrange maps side by side
+  combined_maps <- tmap_arrange(coef_map, p_map, ncol = 2)
+  
+  # Print summaries
+  cat("\nSummary Statistics for", gwr_variables[variable_name], "\n")
+  cat("\nCoefficients:\n")
+  print(summary(stats$coefficient))
+  cat("\nStandard Errors:\n")
+  print(summary(stats$se_value))
+  cat("\nP-values:\n")
+  print(summary(stats$p_value))
+  
+  # Create significance summary with mean coefficients
+  significance_counts <- data.frame(
+    Significance = c("Highly significant (p < 0.01)",
+                    "Significant (0.01 ≤ p < 0.05)",
+                    "Marginally significant (0.05 ≤ p < 0.1)",
+                    "Not significant (p ≥ 0.1)"),
+    Count = c(
+      sum(stats$p_value < 0.01),
+      sum(stats$p_value >= 0.01 & stats$p_value < 0.05),
+      sum(stats$p_value >= 0.05 & stats$p_value < 0.1),
+      sum(stats$p_value >= 0.1)
+    ),
+    Percentage = c(
+      mean(stats$p_value < 0.01),
+      mean(stats$p_value >= 0.01 & stats$p_value < 0.05),
+      mean(stats$p_value >= 0.05 & stats$p_value < 0.1),
+      mean(stats$p_value >= 0.1)
+    ) * 100,
+    Mean_Coefficient = c(
+      mean(stats$coefficient[stats$p_value < 0.01]),
+      mean(stats$coefficient[stats$p_value >= 0.01 & stats$p_value < 0.05]),
+      mean(stats$coefficient[stats$p_value >= 0.05 & stats$p_value < 0.1]),
+      mean(stats$coefficient[stats$p_value >= 0.1])
+    )
+  )
+  
+  cat("\nSignificance Summary:\n")
+  print(significance_counts)
+  
+  # Print additional interpretation
+  cat("\nInterpretation:\n")
+  cat("Coefficient range:", round(min(stats$coefficient), 3), "to", round(max(stats$coefficient), 3), "\n")
+  cat("Mean coefficient:", round(mean(stats$coefficient), 3), "\n")
+  cat("Percentage of significant coefficients (p < 0.05):", 
+      round(mean(stats$p_value < 0.05) * 100, 1), "%\n")
+  
+  # Return maps and data
+  return(list(maps = combined_maps))
+}
+
+
+```
+
+## Examining how urbanity affects use of mobile money
+
+```{r}
+plot_gwr_stats("urban_pct")
+```
+
+The relationship between urban population percentage and mobile money usage in Tanzania shows distinct geographical patterns. The coefficient map on the left indicates that values range from 0.423 to 0.456, with the darkest regions in the south and southeast showing the strongest positive impact of urban population percentage on mobile money usage. In contrast, the lighter northern regions have lower coefficients, suggesting a weaker association between urbanisation and mobile money adoption. The p-values map on the right confirms that this relationship is statistically significant across nearly all regions, with most areas displaying very low p-values (0.00 to 0.01). This consistent significance indicates that, despite regional differences, urban population percentage remains a key predictor of mobile money usage throughout Tanzania.
+
+A closer examination of geographical features provides insight into these spatial patterns. The **Southern Highlands**---notably the agricultural districts of **Mbeya, Iringa, and Njombe**---depend heavily on farming, with predominantly rural populations. In these areas, the positive relationship between urban population percentage and mobile money usage likely reflects the limited financial infrastructure in rural zones. As urban centres develop in these highland regions, they become focal points for financial services, promoting mobile money adoption among rural residents seeking alternatives to traditional banking.
+
+Similarly, in the **Lake Victoria basin** in the northwest---covering regions like **Mwanza, Mara, and Kagera**---the economy is largely agricultural. Here, the association between urbanisation and mobile money usage is weaker, as rural populations often rely on informal financial systems and may have limited exposure to mobile financial services. This reliance on agriculture and high rural population density results in lower coefficients, reflecting limited influence of urbanisation on mobile money adoption in these areas.
+
+Conversely, **coastal regions** such as **Dar es Salaam** and **Zanzibar** demonstrate a stronger positive relationship. As major economic and trade hubs, these coastal areas are highly urbanised and equipped with well-developed infrastructure for financial services and mobile connectivity. Urbanisation here enhances accessibility to mobile money platforms, with residents and businesses readily adopting mobile financial services. This dense service network along the coast contributes to higher coefficients in the south and southeast, where urbanisation plays a substantial role in expanding financial inclusion.
+
+In summary, while urban population percentage is a significant predictor of mobile money usage across Tanzania, the impact varies by region due to specific geographical and economic characteristics. Agricultural areas in the Southern Highlands and Lake Victoria basin, dominated by rural populations, exhibit weaker correlations, likely due to limited financial infrastructure and reliance on traditional financial practices. In contrast, coastal economic hubs like Dar es Salaam and Zanzibar show a stronger positive association between urbanisation and mobile money usage. These findings highlight the importance of region-specific strategies for promoting financial inclusion, with a focus on improving infrastructure in agricultural regions and leveraging established urbanisation in tourism and coastal areas to maximise mobile money adoption.
+
+## Examining how age affects use of mobile money
+
+```{r}
+plot_gwr_stats("median_age")
+```
+
+In examining the relationship between median age and mobile money usage across Tanzania, I noticed that the coefficients and p-values highlight some clear regional patterns. The coefficient map on the left shows values ranging from 0.095 to 0.234, with darker areas, particularly in the central and northeastern regions, showing higher coefficients. This suggests that median age has a stronger positive impact on mobile money usage in these areas, meaning that as the median age increases, mobile money usage is expected to increase more substantially. In contrast, the lighter areas, mainly in the western and southern regions, have lower coefficients, indicating a weaker relationship between median age and mobile money usage there. The p-values map on the right, however, shows that almost all regions have relatively high p-values (between 0.10 and 1.00), represented in yellow, suggesting that the relationship between median age and mobile money usage is not statistically significant across most of Tanzania. This indicates that while there might be some association between age and mobile money usage, it is generally weak and unreliable in this dataset.
+
+## Examining how education affects use of mobile money
+
+```{r}
+plot_gwr_stats("average_ed")
+```
+
+In examining the relationship between average education level and mobile money usage across Tanzania, notable geographic patterns emerge in both the coefficient values and the p-values. The coefficient map on the left shows a range from 15.49 to 18.29, with darker regions in the **north and northeast** displaying higher coefficients. This suggests that in these areas, average education level has a stronger positive effect on mobile money usage; as education levels increase, mobile money adoption is expected to rise more significantly. These northern regions, including **Arusha, Kilimanjaro, and parts of Tanga**, have relatively high education levels compared to other areas. This stronger correlation may be influenced by the presence of educational institutions and greater economic opportunities in these regions, which create a favourable environment for the adoption of mobile financial services. Additionally, these regions are close to major tourist areas like the Serengeti and Ngorongoro, where the influence of tourism and a higher influx of educated individuals may further contribute to this positive effect.
+
+In contrast, the lighter-shaded regions in the **south and west**, including areas like **Rukwa, Katavi, and parts of the Southern Highlands**, show lower coefficients, indicating a weaker relationship between education and mobile money usage. These areas are generally more rural and agricultural, with lower average education levels and limited access to financial infrastructure. In these regions, even where education levels increase, the impact on mobile money adoption appears less substantial, possibly due to economic activities that are less reliant on formal financial systems or due to limited exposure to mobile financial services.
+
+The p-values map on the right further supports these findings, as most regions display low p-values (between 0.00 and 0.05), except for a small area in the far northeast. This indicates that the relationship between education and mobile money usage is statistically significant in the majority of Tanzania. The significance across regions underscores the role of education as a consistent predictor of mobile money usage, though its strength varies depending on regional characteristics.
+
+**Regional Analysis and Implications**
+
+In the **northern and northeastern regions**, where education appears to have a stronger impact, the connection between higher education levels and mobile money usage may reflect a more developed financial ecosystem and greater economic diversity. Urban centres in this area, such as **Arusha** and **Moshi** (near Kilimanjaro), likely provide residents with more access to financial services, fostering a positive environment for mobile money adoption among educated populations. This suggests that policies encouraging education in these areas could further boost financial inclusion, as residents are already predisposed to adopt mobile financial services.
+
+In contrast, the **southern and western regions** are more agrarian, with economic activities focused on farming and limited urbanisation. Here, the lower coefficients suggest that increasing education alone may not be sufficient to significantly boost mobile money usage without concurrent investments in infrastructure and financial access. Regions like the **Southern Highlands** (Mbeya, Rukwa) and the **Lake Tanganyika area** are marked by lower population densities and limited telecommunications infrastructure, which may explain why the relationship between education and mobile money adoption is weaker. Efforts to improve financial inclusion in these areas may need to focus not only on education but also on expanding infrastructure and financial literacy programs tailored to rural communities.
+
+In summary, this analysis highlights that while average education level is a meaningful predictor of mobile money usage across Tanzania, the strength of its impact is geographically variable. Regions in the north and northeast, which are more economically diverse and urbanised, show a stronger positive relationship, reflecting how education can enhance financial inclusion when combined with accessible financial services and infrastructure. Meanwhile, the weaker association in the rural south and west suggests that improving mobile money adoption in these areas will require multi-faceted strategies that go beyond education to address underlying infrastructure and economic challenges. Recognising these regional differences allows for targeted interventions that align with the specific socio-economic and geographical needs of each area, ultimately advancing financial inclusion in a way that reflects Tanzania's diverse landscape.
+
+## Examining how gender affects use of mobile money
+
+```{r}
+plot_gwr_stats("male_pct")
+```
+
+In exploring the influence of gender on mobile money usage across Tanzania, I see that the relationship between gender percentage and mobile money usage is not statistically significant across most of Tanzania. This lack of significance means that while gender might seem to have a positive impact, this relationship is not strong enough to be considered reliable in this dataset.
+
+## Examining how agriculture activity affects use of mobile money
+
+```{r}
+plot_gwr_stats("agriculture_pct")
+
+```
+
+In exploring the influence of agricultural employment percentage on mobile money usage across Tanzania, I see that the relationship between agricultural employment percentage and mobile money usage is not statistically significant across most of Tanzania. This lack of significance means that while agricultural employment might seem to have a negative impact, this relationship is not strong enough to be considered reliable in this dataset.
+
+## Examining how banking use affects use of mobile money
+
+```{r}
+plot_gwr_stats("bank_pct")
+```
+
+High p-values show banking use effect is statistically insignificant.
+
+## Examining how usage of microfinance institution affects use of mobile money
+
+```{r}
+plot_gwr_stats("mfi_pct")
+```
+
+High p-values show MFI usage effect is statistically insignificant.
+
+## Examining how pension usage affects use of mobile money
+
+```{r}
+plot_gwr_stats("pension_pct")
+```
+
+High p-values show pension usage effect is statistically insignificant.
+
+## Examining how usage of insurance affects use of mobile money
+
+```{r}
+plot_gwr_stats("insurance_pct")
+```
+
+High p-values show insurance effect is statistically insignificant.
+
+## Examining how SACCO usage affects use of mobile money
+
+```{r}
+plot_gwr_stats("sacco_pct")
+```
+
+In examining the relationship between SACCO (Savings and Credit Cooperative Organization) usage percentage and mobile money usage across Tanzania, distinct geographical patterns emerge in both the coefficient and p-value maps. The coefficient map on the left shows values ranging from -2.113 to -1.741, all negative, with the darkest shades in the **northern regions** indicating the strongest negative coefficients. This suggests that in these areas, an increase in SACCO usage percentage is associated with a significant decrease in mobile money usage, potentially reflecting a preference for SACCOs over mobile financial services. Regions like **Kilimanjaro, Arusha, and parts of Mara** in the north may have deeply rooted SACCO networks that serve as primary financial institutions, reducing the need for mobile money options. SACCOs in these areas likely provide accessible and trusted financial services, and residents may view them as a stable alternative to newer mobile financial solutions, particularly where SACCOs have historically established strong ties within communities.
+
+In contrast, the lighter regions in the **southern areas** of Tanzania, including districts in **Mbeya and Ruvuma**, display smaller negative coefficients, indicating a weaker inverse relationship between SACCO usage and mobile money adoption. These southern regions, though they may have SACCOs, do not exhibit the same level of negative association, possibly because mobile money services are more widely accepted or integrated with SACCOs, or because SACCO presence is less dominant. This could reflect a more flexible financial ecosystem in the south, where mobile money services and SACCOs coexist without significant competition for users.
+
+The p-value map on the right shows that most regions have low p-values, with values between 0.00 and 0.10, represented by dark blue and green shading, indicating that the relationship between SACCO usage and mobile money usage is statistically significant across much of Tanzania. The consistent significance of this relationship, combined with the negative coefficients, suggests that SACCO usage plays a substantial role in influencing mobile money adoption. In regions with a strong SACCO presence, these cooperatives may fulfil financial needs that mobile money platforms otherwise would, thereby limiting mobile money's role.
+
+**Regional Implications and Analysis**
+
+In the **northern east regions**, where SACCO usage has a stronger negative impact on mobile money adoption, the preference for SACCOs may be shaped by socio-cultural factors and the structure of the local economy. These regions often have stronger communal and cooperative financial practices, where SACCOs are community-driven and cater to collective needs, making them highly trusted institutions. Additionally, SACCOs offer specific financial services, such as loans and savings, that might be seen as more comprehensive compared to mobile money, which primarily focuses on payments and transfers. In these areas, policies to promote mobile money may need to address this preference by exploring potential partnerships between mobile money providers and SACCOs or by expanding the financial services available through mobile platforms to make them more competitive.
+
+In the **southern regions**, where the inverse relationship is weaker, mobile money adoption might coexist more readily with SACCO services, suggesting that SACCOs do not dominate the financial landscape to the same extent as in the north. This could be due to a more diversified financial ecosystem, where users feel comfortable accessing both SACCO services and mobile money options. Here, policies to promote mobile money may be more straightforward, focusing on improving accessibility and enhancing user awareness without facing the same level of competition from SACCOs.
+
+Overall, these findings highlight that SACCO usage acts as a significant factor in limiting mobile money adoption in Tanzania, with stronger effects in the north where SACCOs are deeply embedded in the financial culture. The need for tailored approaches becomes clear: in SACCO-dominant regions, efforts to increase mobile money adoption might focus on building alliances with SACCOs or providing similar financial services through mobile platforms. In regions where the SACCO influence is weaker, mobile money services could expand through straightforward strategies like awareness campaigns and infrastructure investments. Recognising these regional differences allows for interventions that respect local financial preferences while still advancing the broader goal of financial inclusion across Tanzania.Examining how Credit Management Group (CMG) usage affects use of mobile money
+
+```{r}
+plot_gwr_stats("cmg_pct")
+```
+
+High p-values show Credit Management Group (CMG) usage is statistically insignificant.
+
+## Examining how formal investment usage affects use of mobile money
+
+```{r}
+plot_gwr_stats("invest_pct")
+```
+
+High p-values show formal investment is statistically insignificant.
+
+## Examining how informal moneylender usage affects use of mobile money
+
+```{r}
+plot_gwr_stats("moneylender_pct")
+```
+
+High p-values show use of informal money lenders is statistically insignificant.
+
+# Concluding points
+
+Building upon the initial analysis of the geography of financial inclusion in Tanzania, the Geographically Weighted Regression (GWR) model provides nuanced district-level insights into the factors influencing access to financial services. The GWR results reveal significant **spatial variability**, with local R-squared values ranging from 0.530 to 0.565. This variation indicates that the model's explanatory power differs across regions, being more effective in the southern and southeastern districts compared to the northern areas. Such discrepancies suggest that predictors like education and urbanization have varying levels of influence in different geographic contexts, emphasizing the importance of spatial analysis in understanding financial inclusion.
+
+Geospatial analysis of the coefficients and significance levels highlights that **urban population percentage** and **average education level** are significant positive predictors of mobile money usage in most regions. However, their impact is not uniform across the country. The southern and southeastern regions, where the model fits better, show stronger positive relationships. This suggests that urbanization and education have a more pronounced effect on mobile money adoption in these areas, possibly due to better infrastructure and higher concentrations of services. In contrast, the northern regions exhibit lower coefficients and less statistical significance, indicating that other local factors might be influencing mobile money usage there.
+
+Conversely, the significant negative relationship between **SACCO (Savings and Credit Cooperative Organization) usage percentage** and mobile money usage is also spatially variable. The negative impact is more pronounced and statistically significant in certain northern districts, suggesting that traditional financial institutions like SACCOs may be more deeply rooted in these areas. This could imply competition between SACCOs and mobile money platforms, affecting the adoption rates of the latter. The geospatial distribution of this relationship highlights the need to consider local financial ecosystems when promoting mobile money services.
+
+The geospatial patterns observed in the GWR analysis underscore the importance of considering **spatial heterogeneity** when addressing financial inclusion. The varying influence of different predictors across regions indicates that a one-size-fits-all approach may not be effective. **Region-specific strategies** are necessary to address the unique challenges and leverage the strengths of each area. For instance, enhancing urban infrastructure and educational opportunities in regions where these factors significantly boost mobile money usage could be prioritized. In areas where SACCO usage negatively impacts mobile money adoption, integrating mobile money services with existing SACCO operations or promoting awareness of the benefits of mobile money could mitigate this effect.
+
+Understanding Tanzania's diverse geographical landscape---including its complex physical features, economic zones, and varying levels of infrastructure development---is crucial for interpreting the spatial patterns observed in the GWR analysis. The disparities in model performance and predictor significance are deeply intertwined with the country's varied economic activities, population distribution, and accessibility to services. For instance, the agricultural regions in the Southern Highlands and Lake Victoria basin, where reliance on farming and a predominantly rural population prevail, may exhibit lower mobile money usage due to limited financial infrastructure and lower education levels. Conversely, areas rich in tourism---such as the Northern Circuit with the Serengeti and Mount Kilimanjaro, and coastal regions like Dar es Salaam and Zanzibar---benefit from better infrastructure, higher economic activity, and greater technological adoption, leading to increased mobile money usage. Infrastructure development varies significantly, with urban centers enjoying advanced facilities that promote financial inclusion, while rural and remote areas lag due to challenging terrains and sparse populations. These factors influence the spatial dynamics of mobile money adoption, as reflected in the varying significance of predictors like urbanization and education across different regions. Recognizing these geospatial nuances allows for a more accurate analysis that respects the local context, emphasizing the need for region-specific strategies---such as tailored financial services for agricultural communities or leveraging the existing infrastructure in tourism hubs---rather than imposing assumptions based on experiences from more urbanized countries like Singapore.
+
+In conclusion, the GWR analysis not only identifies **urbanization and education as key drivers of mobile money usage** but also highlights how their effects vary geographically. The spatial variability in both model performance and predictor influence emphasizes the need for **geospatially informed policymaking**. Tailoring interventions to the specific needs and characteristics of each region can enhance the effectiveness of efforts to promote financial inclusion. By leveraging geospatial analysis, policymakers and stakeholders can develop targeted strategies that address the unique spatial dynamics influencing mobile money adoption across Tanzania. This geospatial approach is essential for overcoming geographic barriers, supporting underserved regions, and ultimately contributing to the country's socio-economic development goals.
